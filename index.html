@@ -5,11 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Script Breakdown - ToshooT</title>
     
+    <!-- Third-Party CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     
+    <!-- Application CSS -->
     <link rel="stylesheet" href="style.css">
 
+    <!-- Third-Party JS Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -44,6 +47,7 @@
     </header>
 
     <div class="container" id="main-container">
+        <!-- Main Breakdown View -->
         <div id="breakdown-view">
             <input type="file" id="file-input" accept=".filmbreakdown,.json" style="display: none;">
             <div class="section" id="breakdown-tool">
@@ -73,9 +77,11 @@
                     <div class="breakdown-grid" id="breakdown-entry-grid"></div>
                     <button type="submit" class="btn-primary btn-add-breakdown">Add Scene Breakdown to Sequence</button>
                 </form>
+                <div id="sequence-total-cost" class="sequence-total"></div>
             </div>
         </div>
 
+        <!-- Project Estimation View -->
         <div id="estimation-view" class="section" style="display: none;">
             <div class="estimation-header">
                 <h2>Project Cost Estimation</h2>
@@ -92,6 +98,7 @@
         </div>
     </div>
 
+    <!-- Side Panel for Sequences & Filters -->
     <div id="sequence-panel" class="side-panel">
         <div class="panel-header">
             <h3>Sequences & Filters</h3>
@@ -109,6 +116,7 @@
         <div id="sequence-list" class="panel-list"></div>
     </div>
 
+    <!-- Modals & Templates -->
     <div id="edit-breakdown-modal" class="modal"></div>
     <div id="project-info-modal" class="modal"></div>
     <div id="share-card-template" style="position: absolute; left: -9999px; width: 450px;"></div>
@@ -116,3 +124,4 @@
     <script src="script.js" defer></script>
 </body>
 </html>
+
