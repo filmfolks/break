@@ -10,23 +10,19 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
     <style>
-        /* --- Global Styles --- */
         :root {
             --primary-color: #3b82f6; --background-color: #111827; --surface-color: #1f2937;
-            --text-color: #f3f4f6; --border-color: #374151; --danger-color: #ef4444;
+            --text-color: #f3f4f6; --border-color: #374151; --danger-color: #ef4444; --success-color: #22c55e;
             --color-cast: #f59e0b; --color-props: #10b981; --color-costumes: #8b5cf6;
             --color-makeup: #ec4899; --color-vehicles: #6366f1; --color-sfx: #d946ef;
             --color-sound: #0ea5e9; --color-stunts: #f43f5e;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--background-color); color: var(--text-color); margin: 0; font-size: 16px;
+            background-color: var(--background-color); color: var(--text-color); margin: 0;
         }
-
-        /* --- Header & Layout --- */
         .page-header {
             display: flex; justify-content: space-between; align-items: center;
             background-color: var(--surface-color); padding: 15px 20px; border-bottom: 2px solid var(--border-color);
@@ -37,8 +33,6 @@
         #app-title { font-family: 'Roboto', sans-serif; margin: 0; font-size: 1.8rem; color: var(--primary-color); }
         .container { max-width: 1600px; margin: 20px auto; padding: 0 20px; }
         .section { background-color: var(--surface-color); padding: 25px; border-radius: 8px; }
-
-        /* --- Main Form & Categories --- */
         .new-item-form { border-top: 2px solid var(--border-color); margin-top: 30px; padding-top: 20px; }
         .scene-details-form { padding-bottom: 15px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); }
         .form-grid-condensed { display: grid; grid-template-columns: 1fr 1fr 3fr 1fr; gap: 15px; }
@@ -54,20 +48,12 @@
         .tagged-item-name { flex-grow: 1; word-break: break-all; }
         .delete-item-btn { background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1rem; padding-left: 10px; }
         .btn-add-breakdown { width: 100%; padding: 15px; font-size: 1.2rem; margin-top: 10px; }
-        .cost-input {
-            display: none; width: 80px !important; padding: 4px 8px !important;
-            font-size: 0.9rem !important; text-align: right; background-color: var(--background-color) !important;
-        }
+        .cost-input { display: none; width: 80px !important; padding: 4px 8px !important; font-size: 0.9rem !important; text-align: right; background-color: var(--background-color) !important; }
         .producer-mode .cost-input { display: block; }
-        .total-cost {
-            display: none; margin-top: 25px; padding: 20px; background-color: var(--background-color);
-            border-radius: 8px; text-align: right;
-        }
+        .total-cost { display: none; margin-top: 25px; padding: 20px; background-color: var(--background-color); border-radius: 8px; text-align: right; }
         .producer-mode .total-cost { display: block; }
         .total-cost h3 { margin: 0; font-size: 1.8rem; font-weight: 700; }
         .total-cost span { color: var(--success-color); }
-
-        /* --- Buttons & Dropdowns --- */
         button, .btn-secondary { padding: 10px 20px; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; border: none; }
         .btn-primary { background-color: var(--primary-color); color: white; }
         .btn-danger { background-color: var(--danger-color); color: white; }
@@ -81,8 +67,6 @@
         .dropdown-header { padding: 8px 20px; font-size: 0.8rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; cursor: default; }
         .dropdown-divider { border: none; height: 1px; background-color: var(--border-color); margin: 8px 0; }
         .show { display: block; }
-
-        /* --- Breakdown Strip Styles --- */
         #breakdown-strips-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 30px; }
         .breakdown-strip-wrapper { display: flex; align-items: center; gap: 10px; }
         .breakdown-strip { flex-grow: 1; background-color: var(--background-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 15px; display: flex; align-items: center; gap: 15px; overflow-x: auto; white-space: nowrap; }
@@ -91,8 +75,6 @@
         .strip-item-summary .count { font-weight: bold; color: var(--text-color); }
         .strip-actions { display: flex; align-items: center; gap: 10px; }
         .edit-btn-strip { background: none; border: none; color: var(--primary-color); font-size: 1.2rem; cursor: pointer; padding: 0; line-height: 1; }
-
-        /* --- Side Panel & Modals --- */
         .side-panel { position: fixed; top: 0; right: -320px; width: 300px; height: 100%; background-color: var(--surface-color); box-shadow: -5px 0 15px rgba(0,0,0,0.5); z-index: 2000; transition: right 0.3s ease-in-out; display: flex; flex-direction: column; }
         .side-panel.open { right: 0; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid var(--border-color); }
@@ -108,17 +90,13 @@
         .cost-summary-table td { padding: 8px; border-bottom: 1px solid var(--border-color); }
         .cost-summary-table td:last-child { text-align: right; font-weight: bold; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-        /* --- Share Card --- */
-        #share-card-template { position: absolute; left: -9999px; width: 450px; background-color: var(--surface-color); color: var(--text-color); padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; border-radius: 8px; }
+        #share-card-template { position: absolute; left: -9999px; width: 450px; background-color: var(--surface-color); color: var(--text-color); padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; border-radius: 8px;}
         .share-card-header { text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 15px; }
         .share-card-header h1 { margin: 0; color: var(--primary-color); }
         .share-card-header p { margin: 5px 0 0; color: #9ca3af; }
         .share-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .share-card-category h4 { margin: 0 0 10px; font-size: 1.1rem; color: var(--primary-color); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
         .share-card-list { list-style: none; padding: 0; margin: 0; font-size: 0.95rem; }
-
-        /* --- Responsive --- */
         @media (max-width: 768px) { .form-grid-condensed { grid-template-columns: 1fr 1fr; } .breakdown-grid { grid-template-columns: 1fr; } .breakdown-strip { flex-wrap: wrap; white-space: normal; } }
     </style>
 </head>
@@ -174,11 +152,11 @@
     <div id="project-info-modal" class="modal"></div>
     <div id="project-cost-modal" class="modal"></div>
     <div id="share-card-template"></div>
-    <div id="filter-panel" class="side-panel"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- CATEGORY DEFINITIONS ---
+            console.log("Script Breakdown Initializing...");
+
             const CATEGORIES = [
                 { key: 'cast', title: 'Cast', icon: 'fa-user-ninja', color: 'var(--color-cast)' },
                 { key: 'props', title: 'Props', icon: 'fa-magic-wand-sparkles', color: 'var(--color-props)' },
@@ -190,12 +168,10 @@
                 { key: 'stunts', title: 'Stunts', icon: 'fa-bolt', color: 'var(--color-stunts)' },
             ];
 
-            // --- GLOBAL STATE ---
             let projectData = { breakdowns: [], projectInfo: {} };
             let currentBreakdown = {};
             let currentMode = 'assistant';
 
-            // --- INITIALIZATION ---
             function initialize() {
                 setupEventListeners();
                 createEntryGrid();
@@ -203,7 +179,6 @@
                 setMode(currentMode);
             }
 
-            // --- SETUP EVENT LISTENERS ---
             function setupEventListeners() {
                 const safeAddListener = (id, event, handler) => {
                     const element = document.getElementById(id);
@@ -233,7 +208,6 @@
                 });
             }
 
-            // --- MODE SWITCHING ---
             function setMode(mode) {
                 currentMode = mode;
                 const container = document.getElementById('main-container');
@@ -253,7 +227,6 @@
                 renderBreakdowns();
             }
 
-            // --- UI CREATION & RENDERING ---
             function createEntryGrid() {
                 const grid = document.getElementById('breakdown-entry-grid');
                 if (!grid) return;
@@ -262,8 +235,7 @@
                     const categoryDiv = document.createElement('div');
                     categoryDiv.className = 'breakdown-entry-category';
                     categoryDiv.style.borderTopColor = cat.color;
-                    categoryDiv.innerHTML = `
-                        <h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4>
+                    categoryDiv.innerHTML = `<h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4>
                         <form class="add-item-form" data-category="${cat.key}">
                             <input type="text" placeholder="Add element..." required>
                             <button type="submit">Add</button>
@@ -298,7 +270,10 @@
                         
                         const costInput = li.querySelector('.cost-input');
                         costInput.value = item.cost || '';
-                        costInput.oninput = () => { item.cost = parseFloat(costInput.value) || 0; calculateAndDisplayTotalCost(); };
+                        costInput.oninput = () => { 
+                            item.cost = parseFloat(costInput.value) || 0; 
+                            calculateAndDisplayTotalCost();
+                        };
 
                         li.querySelector('.delete-item-btn').onclick = () => {
                             data[categoryKey].splice(index, 1);
@@ -308,6 +283,26 @@
                         list.appendChild(li);
                     });
                 }
+            }
+
+            function handleAddBreakdown(e) {
+                e.preventDefault();
+                const sceneNumberInput = document.getElementById('scene-number');
+                if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; }
+                const sceneDetails = {
+                    id: Date.now(),
+                    sceneNumber: sceneNumberInput.value,
+                    sceneType: document.getElementById('scene-type').value,
+                    sceneLocation: document.getElementById('scene-location').value,
+                    sceneTime: document.getElementById('scene-time').value,
+                };
+                const newBreakdown = { ...sceneDetails, ...currentBreakdown };
+                projectData.breakdowns.push(newBreakdown);
+                saveProjectData();
+                renderBreakdowns();
+                currentBreakdown = {};
+                document.getElementById('breakdown-form').reset();
+                CATEGORIES.forEach(cat => renderCurrentBreakdownList(`entry-list-${cat.key}`, cat.key, currentBreakdown));
             }
 
             function renderBreakdowns() {
@@ -338,33 +333,6 @@
                 calculateAndDisplayTotalCost();
             }
 
-            // --- CORE DATA & STATE FUNCTIONS ---
-            function addItemToCurrent(categoryKey, itemObject) {
-                if (!currentBreakdown[categoryKey]) currentBreakdown[categoryKey] = [];
-                currentBreakdown[categoryKey].push(itemObject);
-                renderCurrentBreakdownList(`entry-list-${categoryKey}`, categoryKey, currentBreakdown);
-            }
-
-            function handleAddBreakdown(e) {
-                e.preventDefault();
-                const sceneNumberInput = document.getElementById('scene-number');
-                if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; }
-                const sceneDetails = {
-                    id: Date.now(),
-                    sceneNumber: sceneNumberInput.value,
-                    sceneType: document.getElementById('scene-type').value,
-                    sceneLocation: document.getElementById('scene-location').value,
-                    sceneTime: document.getElementById('scene-time').value,
-                };
-                const newBreakdown = { ...sceneDetails, ...currentBreakdown };
-                projectData.breakdowns.push(newBreakdown);
-                saveProjectData();
-                renderBreakdowns();
-                currentBreakdown = {};
-                document.getElementById('breakdown-form').reset();
-                CATEGORIES.forEach(cat => renderCurrentBreakdownList(`entry-list-${cat.key}`, cat.key, currentBreakdown));
-            }
-
             function calculateAndDisplayTotalCost() {
                 const display = document.getElementById('total-cost-display');
                 if (currentMode !== 'producer') { display.style.display = 'none'; return; }
@@ -380,7 +348,6 @@
                 display.style.display = 'block';
             }
 
-            // --- LOCALSTORAGE & FILE OPERATIONS ---
             function saveProjectData() { localStorage.setItem('scriptBreakdownProject', JSON.stringify(projectData)); }
             function loadProjectData() {
                 const savedData = localStorage.getItem('scriptBreakdownProject');
@@ -394,34 +361,7 @@
                     renderBreakdowns();
                 }
             }
-            function saveProjectFile() {
-                const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${projectData.projectInfo.prodName || 'Breakdown'}.filmbreakdown`;
-                a.click();
-                URL.revokeObjectURL(url);
-            }
-            function openProjectFile(event) {
-                const file = event.target.files[0]; if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        const loadedData = JSON.parse(e.target.result);
-                        if (loadedData && loadedData.breakdowns) {
-                            projectData = loadedData;
-                            saveProjectData();
-                            alert('Project loaded successfully!');
-                            loadProjectData();
-                        } else { alert('Error: Invalid project file format.'); }
-                    } catch (error) { alert('Error: Could not read project file.'); }
-                };
-                reader.readAsText(file);
-                event.target.value = '';
-            }
 
-            // --- MODAL LOGIC ---
             function openProjectInfoModal() {
                 const modal = document.getElementById('project-info-modal');
                 const projectInfo = projectData.projectInfo || {};
@@ -445,11 +385,38 @@
                 };
             }
 
+            function openProjectFile(event) {
+                const file = event.target.files[0]; if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const loadedData = JSON.parse(e.target.result);
+                        if (loadedData && loadedData.breakdowns) {
+                            projectData = loadedData;
+                            saveProjectData();
+                            alert('Project loaded successfully!');
+                            loadProjectData();
+                        } else { alert('Error: Invalid project file format.'); }
+                    } catch (error) { alert('Error: Could not read project file.'); }
+                };
+                reader.readAsText(file);
+                event.target.value = '';
+            }
+
+            function saveProjectFile() {
+                const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${projectData.projectInfo.prodName || 'Breakdown'}.filmbreakdown`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+            
             function openEditModal(breakdownId) {
                 const modal = document.getElementById('edit-breakdown-modal');
                 const breakdown = projectData.breakdowns.find(b => b.id === breakdownId);
                 if (!modal || !breakdown) return;
-
                 let categoryHTML = '';
                 CATEGORIES.forEach(cat => {
                     categoryHTML += `<div class="breakdown-entry-category" style="border-top-color: ${cat.color};">
@@ -467,7 +434,6 @@
                         <button id="save-changes-btn" class="btn-primary">Save Changes</button>
                     </div></div>`;
                 modal.style.display = 'block';
-
                 let tempEditData = JSON.parse(JSON.stringify(breakdown));
                 CATEGORIES.forEach(cat => {
                     modal.querySelector(`[data-category="${cat.key}"]`).addEventListener('submit', (e) => {
@@ -482,7 +448,6 @@
                     });
                     renderEditList(cat.key, tempEditData);
                 });
-
                 modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
                 modal.querySelector('#save-changes-btn').onclick = () => handleSaveChanges(breakdownId, tempEditData);
                 modal.querySelector('#delete-breakdown-btn').onclick = () => handleDelete(breakdownId);
@@ -557,7 +522,7 @@
                 modal.style.display = 'block';
                 modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
             }
-
+     
 function saveAsExcel() {
         if (projectData.panelItems.length === 0) { alert("No data to export."); return; }
         const workbook = XLSX.utils.book_new();
