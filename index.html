@@ -5,14 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Script Breakdown - ToshooT</title>
     
-    <!-- Local CSS (assuming you will move these files locally for the app) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Third-Party CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Application CSS -->
     <link rel="stylesheet" href="style.css">
 
-    <!-- Local JS Libraries -->
+    <!-- Third-Party JS Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
     <header class="page-header">
@@ -23,11 +27,9 @@
                     <a id="project-info-btn"><i class="fas fa-info-circle"></i> Project Info</a>
                     <a id="open-project-btn"><i class="fas fa-folder-open"></i> Open Project</a>
                     <a id="save-project-btn"><i class="fas fa-save"></i> Save Project</a>
-                    <a id="save-excel-btn"><i class="fas fa-file-excel"></i> Save as Excel</a>
-                    <a id="project-cost-btn"><i class="fas fa-dollar-sign"></i> Project Cost</a>
                     <hr class="dropdown-divider">
                     <div class="dropdown-header">View Mode</div>
-                    <a id="assistant-mode-btn" class="dropdown-item active-mode"><i class="fas fa-user-edit"></i> Assistant Mode</a>
+                    <a id="assistant-mode-btn" class="dropdown-item"><i class="fas fa-user-edit"></i> Assistant Mode</a>
                     <a id="producer-mode-btn" class="dropdown-item"><i class="fas fa-user-tie"></i> Producer Mode</a>
                     <hr class="dropdown-divider">
                     <a id="clear-project-btn"><i class="fas fa-eraser"></i> Clear All Breakdowns</a>
@@ -38,54 +40,82 @@
             <h2 id="app-title">Script Breakdown</h2>
         </div>
         <div class="header-right">
-            <button id="sequence-hamburger-btn" class="icon-btn"><i class="fas fa-layer-group"></i></button>
+            <button id="estimate-btn" class="icon-btn" title="Project Estimate"><i class="fas fa-calculator"></i></button>
+            <button id="sequence-hamburger-btn" class="icon-btn" title="Sequences & Filters"><i class="fas fa-layer-group"></i></button>
         </div>
     </header>
 
     <div class="container" id="main-container">
-        <input type="file" id="file-input" accept=".filmbreakdown,.json" style="display: none;">
-        <div class="section" id="breakdown-tool">
-            <div id="active-sequence-display"></div>
-            <div id="breakdown-strips-container"></div>
-            
-            <form id="breakdown-form" class="new-item-form">
-                <h3>New Scene Breakdown</h3>
-                <div class="scene-details-form">
-                    <div class="form-grid-condensed">
-                        <input type="text" id="scene-number" placeholder="Scene No." required>
-                        <select id="scene-type"><option value="INT">INT.</option><option value="EXT">EXT.</option><option value="INT/EXT">INT./EXT.</option></select>
-                        <input type="text" id="scene-location" placeholder="Location">
-                        <select id="scene-time"><option value="DAY">DAY</option><option value="NIGHT">NIGHT</option></select>
+        <!-- Main Breakdown View -->
+        <div id="breakdown-view">
+            <input type="file" id="file-input" accept=".filmbreakdown,.json" style="display: none;">
+            <div class="section" id="breakdown-tool">
+                <div class="top-controls">
+                    <div id="active-sequence-display">No active sequence.</div>
+                    <div id="currency-selector-wrapper" style="display: none;">
+                        <label for="currency-selector">Currency: </label>
+                        <select id="currency-selector">
+                            <option value="USD">$ USD</option>
+                            <option value="EUR">€ EUR</option>
+                            <option value="GBP">£ GBP</option>
+                            <option value="INR">₹ INR</option>
+                        </select>
                     </div>
                 </div>
-                <div class="breakdown-grid" id="breakdown-entry-grid"></div>
-                <button type="submit" class="btn-primary btn-add-breakdown">Add Scene Breakdown to Sequence</button>
-            </form>
-            <div id="total-cost-display" class="total-cost"></div>
+                <div id="breakdown-strips-container"></div>
+                <form id="breakdown-form" class="new-item-form">
+                    <h3>New Scene Breakdown</h3>
+                    <div class="scene-details-form">
+                        <div class="form-grid-condensed">
+                            <input type="text" id="scene-number" placeholder="Scene No." required>
+                            <select id="scene-type"><option value="INT">INT.</option><option value="EXT">EXT.</option><option value="INT/EXT">INT./EXT.</option></select>
+                            <input type="text" id="scene-location" placeholder="Location">
+                            <select id="scene-time"><option value="DAY">DAY</option><option value="NIGHT">NIGHT</option></select>
+                        </div>
+                    </div>
+                    <div class="breakdown-grid" id="breakdown-entry-grid"></div>
+                    <button type="submit" class="btn-primary btn-add-breakdown">Add Scene Breakdown to Sequence</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Project Estimation View -->
+        <div id="estimation-view" class="section" style="display: none;">
+            <div class="estimation-header">
+                <h2>Project Cost Estimation</h2>
+                <p>Aggregated costs from all scenes and sequences.</p>
+            </div>
+            <div id="estimation-table-container"></div>
+            <div class="total-cost-final">
+                <h3 id="grand-total-cost">Grand Total: <span>$0.00</span></h3>
+                <div class="export-buttons">
+                    <button id="export-excel-btn" class="btn-secondary"><i class="fas fa-file-excel"></i> Export as Excel</button>
+                    <button id="export-pdf-btn" class="btn-secondary"><i class="fas fa-file-pdf"></i> Export as PDF</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Side Panel for Sequences -->
+    <!-- Side Panel for Sequences & Filters -->
     <div id="sequence-panel" class="side-panel">
-        <div class="panel-header">
-            <h3>Sequences</h3>
-            <button id="close-panel-btn" class="icon-btn small">&times;</button>
-        </div>
+        <div class="panel-header"><h3>Sequences & Filters</h3><button id="close-panel-btn" class="icon-btn small">&times;</button></div>
         <div class="panel-content">
             <button id="new-sequence-btn" class="btn-primary">New Sequence</button>
             <button id="add-schedule-break-btn" class="btn-secondary">Add Schedule Break</button>
         </div>
+        <div class="panel-filter-section">
+            <h4>Filter Breakdowns</h4>
+            <select id="filter-category-select"><option value="all">Show All</option></select>
+            <input type="text" id="filter-value-input" placeholder="Type to filter..." style="display: none;">
+        </div>
         <div id="sequence-list" class="panel-list"></div>
     </div>
 
-    <!-- Modal Placeholders -->
+    <!-- Modals & Templates -->
     <div id="edit-breakdown-modal" class="modal"></div>
     <div id="project-info-modal" class="modal"></div>
-    <div id="project-cost-modal" class="modal"></div>
     <div id="share-card-template"></div>
 
     <script src="script.js" defer></script>
 </body>
 </html>
-
-v
