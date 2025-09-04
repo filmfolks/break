@@ -28,13 +28,18 @@
                     <a id="project-info-btn"><i class="fas fa-info-circle"></i> Project Info</a>
                     <a id="new-sequence-btn"><i class="fas fa-film"></i> New Sequence</a>
                     <a id="open-project-btn"><i class="fas fa-folder-open"></i> Open Project</a>
-                    <a id="save-project-btn"><i class="fas fa-save"></i> Save Project</a>
+                    <a id="save-project-btn"><i class="fas fa-save"></i> Save Project File</a>
+                    <a id="save-full-excel-btn"><i class="fas fa-file-excel"></i> Save Full Project Excel</a>
+                    <a id="share-project-btn"><i class="fas fa-share-alt"></i> Share Project...</a>
                     <hr class="dropdown-divider">
                     <div class="dropdown-header">View Mode</div>
                     <a id="assistant-mode-btn" class="dropdown-item"><i class="fas fa-user-edit"></i> Assistant Mode</a>
                     <a id="producer-mode-btn" class="dropdown-item"><i class="fas fa-user-tie"></i> Producer Mode</a>
                     <hr class="dropdown-divider">
-                    <a id="clear-project-btn"><i class="fas fa-eraser"></i> Clear All Breakdowns</a>
+                    <a id="auto-save-btn"><i class="fas fa-sync-alt"></i> Auto Save <span id="auto-save-status" class="auto-save-status off">OFF</span></a>
+                    <a id="clear-project-btn"><i class="fas fa-eraser"></i> Clear Project</a>
+                    <a id="info-btn"><i class="fas fa-question-circle"></i> Info</a>
+                    <a id="about-btn"><i class="fas fa-user-friends"></i> About</a>
                 </div>
             </div>
         </div>
@@ -85,8 +90,8 @@
         <!-- Project Estimation View -->
         <div id="estimation-view" class="section" style="display: none;">
             <div class="estimation-header">
-                <h2>Project Cost Estimation</h2>
-                <p>Aggregated costs from all scenes and sequences.</p>
+                <h2>Scene-by-Scene Cost Report</h2>
+                <p>Detailed costs for each scene in the project.</p>
             </div>
             <div id="estimation-table-container"></div>
             <div class="total-cost-final">
@@ -117,12 +122,12 @@
         <div id="sequence-list" class="panel-list"></div>
     </div>
 
-    <!-- Modals & Templates -->
+    <!-- Modals -->
     <div id="edit-breakdown-modal" class="modal"></div>
     <div id="project-info-modal" class="modal"></div>
-    <div id="share-card-template" style="position: absolute; left: -9999px; width: 450px;"></div>
+    <div id="info-modal" class="modal"></div>
+    <div id="about-modal" class="modal"></div>
 
     <script src="script.js" defer></script>
 </body>
 </html>
-
