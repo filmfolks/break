@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentBreakdown = {};
     let currentMode = 'assistant';
     let currentView = 'breakdown';
+    let autoSaveInterval = null;
 
     function initialize() {
         setupEventListeners();
@@ -49,9 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
         safeAddListener('open-project-btn', 'click', () => document.getElementById('file-input').click());
         safeAddListener('file-input', 'change', openProjectFile);
         safeAddListener('save-project-btn', 'click', saveProjectFile);
+        safeAddListener('save-full-excel-btn', 'click', () => saveAsExcel(true));
+        safeAddListener('share-project-btn', 'click', shareProject);
         safeAddListener('clear-project-btn', 'click', clearProject);
         safeAddListener('assistant-mode-btn', 'click', () => setMode('assistant'));
         safeAddListener('producer-mode-btn', 'click', () => setMode('producer'));
+        safeAddListener('auto-save-btn', 'click', toggleAutoSave);
+        safeAddListener('info-btn', 'click', openInfoModal);
+        safeAddListener('about-btn', 'click', openAboutModal);
+        
         safeAddListener('estimate-btn', 'click', () => showView('estimation'));
         safeAddListener('sequence-hamburger-btn', 'click', () => document.getElementById('sequence-panel').classList.add('open'));
         safeAddListener('breakdown-form', 'submit', handleAddBreakdownToSequence);
@@ -91,18 +98,22 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('breakdownAppMode', mode);
         const container = document.getElementById('main-container');
         const currencyWrapper = document.getElementById('currency-selector-wrapper');
+        const estimateBtn = document.getElementById('estimate-btn');
         const assistantBtn = document.getElementById('assistant-mode-btn');
         const producerBtn = document.getElementById('producer-mode-btn');
         if (mode === 'producer') {
             container.classList.add('producer-mode');
             currencyWrapper.style.display = 'block';
+            estimateBtn.style.display = 'block';
             producerBtn.classList.add('active-mode');
             assistantBtn.classList.remove('active-mode');
         } else {
             container.classList.remove('producer-mode');
             currencyWrapper.style.display = 'none';
+            estimateBtn.style.display = 'none';
             assistantBtn.classList.add('active-mode');
             producerBtn.classList.remove('active-mode');
+            if(currentView === 'estimation') showView('breakdown');
         }
         createEntryGrid('breakdown-entry-grid', currentBreakdown);
         renderBreakdownStrips();
@@ -167,7 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cat.key === 'misc' && currentMode !== 'producer') {
                 return; 
             }
-
             const isProducer = currentMode === 'producer';
             const formHTML = isProducer ?
                 `<form class="add-item-form producer-form" data-category="${cat.key}">
@@ -179,13 +189,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" placeholder="Add element..." required>
                     <button type="submit" class="btn-primary">Add</button>
                 </form>`;
-
             const categoryDiv = document.createElement('div');
             categoryDiv.className = 'breakdown-entry-category';
             categoryDiv.style.borderTopColor = cat.color;
             categoryDiv.innerHTML = `<h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4> ${formHTML} <ul class="item-list-entry" id="list-${gridId}-${cat.key}"></ul>`;
             grid.appendChild(categoryDiv);
-            
             categoryDiv.querySelector('.add-item-form').addEventListener('submit', (e) => {
                 e.preventDefault();
                 const categoryKey = e.target.dataset.category;
@@ -199,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (costInput) costInput.value = '';
                 }
             });
-
             if (gridId === 'breakdown-entry-grid' && cat.key === 'misc' && (!targetData.misc || targetData.misc.length === 0)) {
                 targetData.misc = [ {id: Date.now()+1, name: "Food", cost: 0}, {id: Date.now()+2, name: "Logistics", cost: 0}, {id: Date.now()+3, name: "Accommodation", cost: 0} ];
             }
@@ -221,7 +228,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="edit-item-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
                         <button class="delete-item-btn" title="Delete">&times;</button>
                     </div>`;
-
                 li.querySelector('.edit-item-btn').onclick = () => {
                     const newName = prompt("Enter new name:", item.name);
                     if (newName !== null) item.name = newName.trim() || item.name;
@@ -287,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const costHTML = `<div class="strip-item-cost">${formatCurrency(sceneTotalCost)}</div>`;
             stripWrapper.innerHTML = `<div class="breakdown-strip"><div class="strip-item-scene">#${breakdown.sceneNumber} - ${breakdown.sceneLocation} (${breakdown.sceneTime})</div>${summaryHTML}${costHTML}</div>
                 <div class="strip-actions">
-                    <button class="share-btn-strip" data-id="${breakdown.id}" title="Share Breakdown"><i class="fas fa-share-alt"></i></button>
+                    <button class="share-btn-strip" data-id="${breakdown.id}" title="Share Scene as Excel"><i class="fas fa-file-excel"></i></button>
                     <button class="edit-btn-strip" data-id="${breakdown.id}" title="Edit Breakdown"><i class="fas fa-pencil-alt"></i></button>
                     <button class="delete-btn-strip" data-id="${breakdown.id}" title="Delete Breakdown"><i class="fas fa-trash"></i></button>
                 </div>`;
@@ -295,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         container.querySelectorAll('.edit-btn-strip').forEach(b => b.onclick = () => openEditModal(parseInt(b.dataset.id)));
         container.querySelectorAll('.delete-btn-strip').forEach(b => b.onclick = () => handleDelete(parseInt(b.dataset.id)));
-        container.querySelectorAll('.share-btn-strip').forEach(b => b.onclick = () => shareSceneBreakdown(parseInt(b.dataset.id)));
+        container.querySelectorAll('.share-btn-strip').forEach(b => b.onclick = () => shareSceneAsExcel(parseInt(b.dataset.id)));
         calculateAndRenderSequenceTotal();
     }
 
@@ -304,7 +310,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
         let totalCost = 0;
         if (activeSequence && activeSequence.breakdowns) {
-            activeSequence.breakdowns.forEach(breakdown => {
+            const filteredBreakdowns = getFilteredBreakdowns(activeSequence.breakdowns);
+            filteredBreakdowns.forEach(breakdown => {
                 CATEGORIES.forEach(cat => {
                     if (breakdown[cat.key]) {
                         totalCost += breakdown[cat.key].reduce((sum, item) => sum + (item.cost || 0), 0);
@@ -312,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
         }
-        totalDiv.innerHTML = `Sequence Total: <span>${formatCurrency(totalCost)}</span>`;
+        totalDiv.innerHTML = `Total for Filtered Scenes: <span>${formatCurrency(totalCost)}</span>`;
     }
 
     function getFilteredBreakdowns(breakdowns) {
@@ -425,6 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         listContainer.innerHTML = '';
         projectData.panelItems.forEach(item => {
             const element = document.createElement('div');
+            element.dataset.id = item.id;
             if (item.type === 'sequence') {
                 element.className = `sequence-item ${item.id === projectData.activeItemId ? 'active' : ''}`;
                 element.textContent = item.name;
@@ -455,49 +463,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function getAggregatedData() {
-        const aggregated = {};
+        const sceneCosts = [];
         let grandTotal = 0;
-        CATEGORIES.forEach(c => aggregated[c.key] = { title: c.title, items: [], total: 0 });
+        let currentScheduleBreak = "N/A";
+
         projectData.panelItems.forEach(pItem => {
-            if (pItem.type === 'sequence' && pItem.breakdowns) {
+            if (pItem.type === 'schedule_break') {
+                currentScheduleBreak = pItem.name;
+            } else if (pItem.type === 'sequence' && pItem.breakdowns) {
                 pItem.breakdowns.forEach(scene => {
+                    let sceneTotal = 0;
                     CATEGORIES.forEach(cat => {
                         if (scene[cat.key]) {
                             scene[cat.key].forEach(item => {
-                                const existing = aggregated[cat.key].items.find(agg => agg.name.toLowerCase() === item.name.toLowerCase());
-                                if (existing) {
-                                    if(!existing.scenes.includes(scene.sceneNumber)) existing.scenes.push(scene.sceneNumber);
-                                } else {
-                                    aggregated[cat.key].items.push({ name: item.name, cost: item.cost, scenes: [scene.sceneNumber] });
-                                }
+                                sceneTotal += item.cost || 0;
                             });
                         }
                     });
+                    sceneCosts.push({
+                        number: scene.sceneNumber,
+                        location: scene.sceneLocation,
+                        sequence: pItem.name,
+                        schedule: currentScheduleBreak,
+                        cost: sceneTotal
+                    });
+                    grandTotal += sceneTotal;
                 });
             }
         });
-        CATEGORIES.forEach(cat => {
-            const categoryTotal = aggregated[cat.key].items.reduce((sum, item) => sum + (item.cost || 0), 0);
-            aggregated[cat.key].total = categoryTotal;
-            grandTotal += categoryTotal;
-        });
-        return { aggregated, grandTotal };
+        return { grandTotal, sceneCosts };
     }
 
     function renderEstimationPage() {
         const container = document.getElementById('estimation-table-container');
         const grandTotalEl = document.getElementById('grand-total-cost');
-        const { aggregated, grandTotal } = getAggregatedData();
-        let tableHTML = '<table class="estimation-table"><thead><tr><th>Item</th><th>Appears in Scene(s)</th><th class="cost-cell">Cost</th></tr></thead><tbody>';
-        CATEGORIES.forEach(cat => {
-            const categoryData = aggregated[cat.key];
-            if (categoryData.items.length > 0) {
-                tableHTML += `<tr class="category-row"><td colspan="3">${categoryData.title}</td></tr>`;
-                categoryData.items.forEach(item => {
-                    tableHTML += `<tr><td>${item.name}</td><td>${item.scenes.join(', ')}</td><td class="cost-cell">${formatCurrency(item.cost)}</td></tr>`;
-                });
-                tableHTML += `<tr class="subtotal-row"><td colspan="2">Category Total</td><td class="cost-cell">${formatCurrency(categoryData.total)}</td></tr>`;
-            }
+        const { grandTotal, sceneCosts } = getAggregatedData();
+        let tableHTML = '<table class="estimation-table"><thead><tr><th>Scene #</th><th>Location</th><th>Sequence</th><th>Schedule Break</th><th class="cost-cell">Total Cost</th></tr></thead><tbody>';
+        sceneCosts.forEach(scene => {
+            tableHTML += `<tr>
+                <td>${scene.number}</td>
+                <td>${scene.location}</td>
+                <td>${scene.sequence}</td>
+                <td>${scene.schedule}</td>
+                <td class="cost-cell">${formatCurrency(scene.cost)}</td>
+            </tr>`;
         });
         tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
@@ -505,26 +514,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exportEstimateToExcel() {
-        const { aggregated, grandTotal } = getAggregatedData();
+        const { grandTotal, sceneCosts } = getAggregatedData();
         const wb = XLSX.utils.book_new();
         const data = [];
         data.push([`Project: ${projectData.projectInfo.prodName || 'Untitled'}`, '', `Currency: ${projectData.currency}`]);
         data.push([`Director: ${projectData.projectInfo.directorName || 'N/A'}`]);
         data.push([]);
-        CATEGORIES.forEach(cat => {
-            const categoryData = aggregated[cat.key];
-            if (categoryData.items.length > 0) {
-                data.push([categoryData.title]);
-                data.push(['Item', 'Scenes', 'Cost']);
-                categoryData.items.forEach(item => data.push([item.name, item.scenes.join(', '), item.cost]));
-                data.push(['Category Total', '', categoryData.total]);
-                data.push([]);
-            }
+        data.push(['Scene #', 'Location', 'Sequence', 'Schedule Break', 'Total Cost']);
+        sceneCosts.forEach(scene => {
+            data.push([scene.number, scene.location, scene.sequence, scene.schedule, scene.cost]);
         });
-        data.push(['GRAND TOTAL', '', grandTotal]);
+        data.push([]);
+        data.push(['','','','GRAND TOTAL', grandTotal]);
         const ws = XLSX.utils.aoa_to_sheet(data);
-        XLSX.utils.book_append_sheet(wb, ws, 'Cost Estimate');
-        XLSX.writeFile(wb, 'Cost_Estimate.xlsx');
+        XLSX.utils.book_append_sheet(wb, ws, 'Scene Cost Report');
+        XLSX.writeFile(wb, 'Scene_Cost_Report.xlsx');
     }
 
     function exportFilteredToExcel() {
@@ -532,108 +536,183 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeSequence) { alert("Please select a sequence to export."); return; }
         const breakdowns = getFilteredBreakdowns(activeSequence.breakdowns);
         if (breakdowns.length === 0) { alert("No breakdowns match the current filter."); return; }
-        const wb = XLSX.utils.book_new();
-        const data = [];
-        data.push([`Project: ${projectData.projectInfo.prodName || 'Untitled'}`]);
-        data.push([`Sequence: ${activeSequence.name}`]);
-        data.push([]);
-        
-        let sequenceTotalCost = 0;
-        const isProducer = currentMode === 'producer';
-        
-        const headers = ['Scene #', 'Location', ...CATEGORIES.map(c => c.title)];
-        if (isProducer) headers.push('Total Cost');
-        data.push(headers);
-
-        breakdowns.forEach(b => {
-            let sceneTotalCost = 0;
-            const row = [b.sceneNumber, b.sceneLocation];
-            CATEGORIES.forEach(cat => {
-                const items = b[cat.key] ? b[cat.key].map(i => {
-                    if(isProducer) sceneTotalCost += (i.cost || 0);
-                    return i.name;
-                }).join('; ') : '';
-                row.push(items);
-            });
-            if(isProducer) row.push(sceneTotalCost);
-            data.push(row);
-            sequenceTotalCost += sceneTotalCost;
-        });
-        if(isProducer) {
-            data.push([]);
-            const totalRow = new Array(headers.length).fill('');
-            totalRow[headers.length - 2] = 'Sequence Total';
-            totalRow[headers.length - 1] = sequenceTotalCost;
-            data.push(totalRow);
-        }
-        const ws = XLSX.utils.aoa_to_sheet(data);
-        ws['!cols'] = headers.map(h => ({wch: h.length < 15 ? 15 : h.length + 2}));
-        XLSX.utils.book_append_sheet(wb, ws, 'Filtered Breakdowns');
-        XLSX.writeFile(wb, `Filtered_${activeSequence.name}.xlsx`);
+        saveAsExcel(false);
     }
 
     function exportEstimateToPDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const { aggregated, grandTotal } = getAggregatedData();
-        const head = [['Item', 'Scenes', `Cost (${projectData.currency})`]];
-        const body = [];
-        CATEGORIES.forEach(cat => {
-            const categoryData = aggregated[cat.key];
-            if (categoryData.items.length > 0) {
-                body.push([{ content: categoryData.title, colSpan: 3, styles: { fontStyle: 'bold', fillColor: [41, 128, 185], textColor: 255 } }]);
-                categoryData.items.forEach(item => body.push([item.name, item.scenes.join(', '), formatCurrency(item.cost)]));
-                body.push([{ content: 'Category Total', colSpan: 2, styles: { fontStyle: 'bold' } }, { content: formatCurrency(categoryData.total), styles: { fontStyle: 'bold', halign: 'right' } }]);
-            }
-        });
-        body.push([{ content: 'GRAND TOTAL', colSpan: 2, styles: { fontStyle: 'bold', fontSize: 14 } }, { content: formatCurrency(grandTotal), styles: { fontStyle: 'bold', fontSize: 14, halign: 'right' } }]);
-        doc.text(`Cost Estimate: ${projectData.projectInfo.prodName || 'Untitled'}`, 14, 15);
+        const { grandTotal, sceneCosts } = getAggregatedData();
+        const head = [['Scene #', 'Location', 'Sequence', 'Schedule', `Total Cost`]];
+        const body = sceneCosts.map(s => [s.number, s.location, s.sequence, s.schedule, formatCurrency(s.cost)]);
+        body.push([{ content: 'GRAND TOTAL', colSpan: 4, styles: { fontStyle: 'bold', fontSize: 14 } }, { content: formatCurrency(grandTotal), styles: { fontStyle: 'bold', fontSize: 14, halign: 'right' } }]);
+        doc.text(`Scene Cost Report: ${projectData.projectInfo.prodName || 'Untitled'}`, 14, 15);
         doc.autoTable({ head, body, startY: 20, didParseCell: (data) => { if(data.cell.raw.toString().startsWith(getCurrencySymbol())) { data.cell.styles.halign = 'right'; } } });
-        doc.save('Cost_Estimate.pdf');
+        doc.save('Scene_Cost_Report.pdf');
     }
     
-    async function shareSceneBreakdown(breakdownId) {
+    async function shareSceneAsExcel(breakdownId) { 
         const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
         const breakdown = activeSequence ? activeSequence.breakdowns.find(b => b.id === breakdownId) : null;
         if (!breakdown) { alert("Could not find breakdown to share."); return; }
-        
-        const card = document.getElementById('share-card-template');
-        let categoriesHTML = '';
+        const wb = XLSX.utils.book_new();
+        const data = [];
+        let sceneTotal = 0;
+        data.push([`Project: ${projectData.projectInfo.prodName || 'Untitled'}`]);
+        data.push([`Scene: #${breakdown.sceneNumber} - ${breakdown.sceneLocation} (${breakdown.sceneTime})`]);
+        data.push([]);
+        const headers = currentMode === 'producer' ? ['Category', 'Item', 'Cost'] : ['Category', 'Item'];
+        data.push(headers);
         CATEGORIES.forEach(cat => {
-            if (breakdown[cat.key] && breakdown[cat.key].length > 0) {
-                categoriesHTML += `<div style="margin-bottom: 10px;">
-                    <h4 style="margin:0 0 5px;color:${cat.color};">${cat.title}</h4>
-                    <ul style="margin:0;padding-left:15px; list-style:none;">${breakdown[cat.key].map(i => `<li>${i.name}</li>`).join('')}</ul>
-                </div>`;
+            if(breakdown[cat.key] && breakdown[cat.key].length > 0) {
+                breakdown[cat.key].forEach(item => {
+                    const cost = item.cost || 0;
+                    if(currentMode === 'producer') {
+                        data.push([cat.title, item.name, cost]);
+                        sceneTotal += cost;
+                    } else {
+                        data.push([cat.title, item.name]);
+                    }
+                });
             }
         });
-        card.innerHTML = `<div style="background-color: var(--surface-color); color: var(--text-color); padding: 20px; border-radius: 8px; border: 1px solid var(--primary-color); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-            <div style="text-align:center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px;">
-                <h2 style="margin:0;color:var(--primary-color);">Breakdown: Scene #${breakdown.sceneNumber}</h2>
-                <p style="margin:5px 0 0; color:#9ca3af;">${breakdown.sceneType}. ${breakdown.sceneLocation} - ${breakdown.sceneTime}</p>
-            </div>
-            ${categoriesHTML}
-        </div>`;
-
-        try {
-            const canvas = await html2canvas(card, { backgroundColor: getComputedStyle(document.body).getPropertyValue('--background-color')});
-            canvas.toBlob(blob => {
-                const file = new File([blob], `Breakdown_Scene_${breakdown.sceneNumber}.png`, {type: 'image/png'});
-                if (navigator.canShare && navigator.canShare({files: [file]})) {
-                    navigator.share({ title: `Breakdown: Scene ${breakdown.sceneNumber}`, files: [file] });
-                } else { alert('Sharing not supported on this browser.'); }
-            }, 'image/png');
-        } catch(e) { console.error(e); alert('Could not generate shareable image.'); }
+        if(currentMode === 'producer') {
+            data.push([]);
+            data.push(['','SCENE TOTAL', sceneTotal]);
+        }
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, `Scene_${breakdown.sceneNumber}`);
+        XLSX.writeFile(wb, `Breakdown_Scene_${breakdown.sceneNumber}.xlsx`);
     }
 
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: projectData.currency }).format(amount || 0);
+    }
+    
     function getCurrencySymbol() {
         try {
             return (0).toLocaleString('en-US', { style:'currency', currency: projectData.currency, minimumFractionDigits:0, maximumFractionDigits:0 }).replace(/[0-9]/g,'').trim();
         } catch (e) { return '$'; }
     }
+    
+    function toggleAutoSave() {
+        const statusEl = document.getElementById('auto-save-status');
+        if (autoSaveInterval) {
+            clearInterval(autoSaveInterval);
+            autoSaveInterval = null;
+            statusEl.textContent = 'OFF';
+            statusEl.className = 'auto-save-status off';
+            alert('Auto-save is now OFF.');
+        } else {
+            autoSaveInterval = setInterval(() => {
+                saveProjectData();
+                console.log('Project auto-saved.');
+            }, 120000);
+            statusEl.textContent = 'ON';
+            statusEl.className = 'auto-save-status on';
+            alert('Auto-save is now ON. Project will save every 2 minutes.');
+        }
+    }
 
-    function formatCurrency(amount) {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: projectData.currency }).format(amount || 0);
+    async function shareProject() {
+        const { grandTotal } = getAggregatedData();
+        const shareText = `*Project Breakdown Summary*\n` +
+            `Production: ${projectData.projectInfo.prodName || 'N/A'}\n` +
+            `Director: ${projectData.projectInfo.directorName || 'N/A'}\n` +
+            `Total Scenes: ${projectData.panelItems.reduce((acc, p) => acc + (p.breakdowns ? p.breakdowns.length : 0), 0)}\n` +
+            (currentMode === 'producer' ? `Estimated Cost: ${formatCurrency(grandTotal)}` : '');
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: `Project: ${projectData.projectInfo.prodName || 'Untitled'}`, text: shareText });
+            } catch (err) { console.error("Share failed:", err); }
+        } else {
+            alert("Sharing is not supported on this browser. You can save the project file instead.");
+        }
+    }
+
+    function openInfoModal() {
+        const modal = document.getElementById('info-modal');
+        modal.innerHTML = `<div class="modal-content small">
+            <span class="close-btn" onclick="this.parentElement.parentElement.style.display='none'">&times;</span>
+            <h3>App Guide</h3>
+            <div class="modal-body info-content">
+                <p><strong>Assistant Mode:</strong> A clean view for tagging script elements without seeing costs.</p>
+                <p><strong>Producer Mode:</strong> Unlocks cost fields for every item, a currency selector, and the main Estimation page for budgeting.</p>
+                <p><strong>Estimate Page:</strong> Aggregates all costs into a scene-by-scene report. Visible only in Producer Mode.</p>
+                <p><strong>Side Panel:</strong> Organize your project with Sequences and Schedule Breaks. You can also filter all scenes by a specific category element.</p>
+                <p><strong>Save Full Excel:</strong> Exports all sequences and their breakdowns into a single Excel file with multiple sheets.</p>
+                <p><strong>Share Scene:</strong> Exports a detailed breakdown of a single scene to an Excel file.</p>
+            </div>
+        </div>`;
+        modal.style.display = 'block';
+    }
+
+    function openAboutModal() {
+        const modal = document.getElementById('about-modal');
+        modal.innerHTML = `<div class="modal-content small">
+            <span class="close-btn" onclick="this.parentElement.parentElement.style.display='none'">&times;</span>
+            <h3 style="text-align:center;">About ToshooT</h3>
+            <p style="font-size: 1.2rem; text-align: center;">Designed by Thosho Tech</p>
+        </div>`;
+        modal.style.display = 'block';
+    }
+
+    function saveAsExcel(isFullProject = true) {
+        if (!isFullProject) {
+            exportFilteredToExcel();
+            return;
+        }
+        const wb = XLSX.utils.book_new();
+        let grandTotal = 0;
+        projectData.panelItems.forEach(pItem => {
+            if (pItem.type === 'sequence' && pItem.breakdowns && pItem.breakdowns.length > 0) {
+                const data = [];
+                let sequenceTotal = 0;
+                const headers = ['Scene #', 'Location', ...CATEGORIES.map(c => c.title)];
+                if(currentMode === 'producer') headers.push('Scene Total');
+                data.push(headers);
+                
+                pItem.breakdowns.forEach(b => {
+                    let sceneTotal = 0;
+                    const row = [b.sceneNumber, b.sceneLocation];
+                    CATEGORIES.forEach(cat => {
+                        const items = b[cat.key] ? b[cat.key].map(i => {
+                            if(currentMode === 'producer') sceneTotal += (i.cost || 0);
+                            return i.name;
+                        }).join('; ') : '';
+                        row.push(items);
+                    });
+                    if(currentMode === 'producer') row.push(sceneTotal);
+                    data.push(row);
+                    sequenceTotal += sceneTotal;
+                });
+
+                if(currentMode === 'producer') {
+                    data.push([]);
+                    const totalRow = new Array(headers.length).fill('');
+                    totalRow[headers.length-2] = "SEQUENCE TOTAL";
+                    totalRow[headers.length-1] = sequenceTotal;
+                    data.push(totalRow);
+                    grandTotal += sequenceTotal;
+                }
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                ws['!cols'] = headers.map(h => ({wch: h.length < 15 ? 15 : h.length + 2}));
+                XLSX.utils.book_append_sheet(wb, ws, pItem.name.replace(/[/\\?*:[\]]/g, ''));
+            }
+        });
+
+        if (currentMode === 'producer' && wb.SheetNames.length > 0) {
+            const summaryData = [['GRAND TOTAL', grandTotal]];
+            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, summaryWs, "Total");
+        }
+        
+        if (wb.SheetNames.length === 0) {
+            alert("No breakdowns to export.");
+            return;
+        }
+
+        XLSX.writeFile(wb, `${(projectData.projectInfo.prodName || 'Full_Project_Breakdown')}.xlsx`);
     }
 
     initialize();
