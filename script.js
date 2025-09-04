@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- CATEGORY DEFINITIONS ---
+    console.log("Script Breakdown Initializing...");
+
     const CATEGORIES = [
         { key: 'cast', title: 'Cast', icon: 'fa-user-ninja', color: 'var(--color-cast)' },
         { key: 'props', title: 'Props', icon: 'fa-magic-wand-sparkles', color: 'var(--color-props)' },
@@ -11,33 +12,34 @@ document.addEventListener('DOMContentLoaded', () => {
         { key: 'stunts', title: 'Stunts', icon: 'fa-bolt', color: 'var(--color-stunts)' },
     ];
 
-    // --- GLOBAL STATE ---
     let projectData = { panelItems: [], activeItemId: null, projectInfo: {} };
-    let currentBreakdown = {}; // Holds items for the scene being entered in the form
-    let currentMode = 'assistant'; // 'assistant' or 'producer'
+    let currentBreakdown = {};
+    let currentMode = 'assistant';
 
-    // --- INITIALIZATION ---
     function initialize() {
         setupEventListeners();
         createEntryGrid();
         loadProjectData();
-        initializeDragAndDrop();
-        setMode(currentMode); // Set initial mode
+        setMode(localStorage.getItem('breakdownAppMode') || 'assistant');
     }
 
-    // --- SETUP EVENT LISTENERS ---
     function setupEventListeners() {
         const safeAddListener = (id, event, handler) => {
             const element = document.getElementById(id);
             if (element) element.addEventListener(event, handler);
         };
         
-        safeAddListener('breakdown-form', 'submit', handleAddBreakdown);
-        
         const hamburgerBtn = document.getElementById('hamburger-btn');
         const dropdownMenu = document.getElementById('dropdown-menu');
         if(hamburgerBtn) hamburgerBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdownMenu.classList.toggle('show'); });
-
+        
+        document.addEventListener('click', (event) => {
+            if (hamburgerBtn && dropdownMenu.classList.contains('show') && !hamburgerBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.classList.remove('show');
+            }
+        });
+        
+        safeAddListener('breakdown-form', 'submit', handleAddBreakdownToSequence);
         safeAddListener('project-info-btn', 'click', openProjectInfoModal);
         safeAddListener('open-project-btn', 'click', () => document.getElementById('file-input').click());
         safeAddListener('file-input', 'change', openProjectFile);
@@ -47,25 +49,19 @@ document.addEventListener('DOMContentLoaded', () => {
         safeAddListener('assistant-mode-btn', 'click', () => setMode('assistant'));
         safeAddListener('producer-mode-btn', 'click', () => setMode('producer'));
         safeAddListener('project-cost-btn', 'click', openProjectCostModal);
-
-        const sequencePanel = document.getElementById('sequence-panel');
-        safeAddListener('sequence-hamburger-btn', 'click', () => { renderSequencePanel(); sequencePanel.classList.add('open'); });
-        safeAddListener('close-panel-btn', 'click', () => sequencePanel.classList.remove('open'));
+        safeAddListener('sequence-hamburger-btn', 'click', () => document.getElementById('sequence-panel').classList.add('open'));
+        safeAddListener('close-panel-btn', 'click', () => document.getElementById('sequence-panel').classList.remove('open'));
+        safeAddListener('new-sequence-btn', 'click', handleNewSequence);
         safeAddListener('add-schedule-break-btn', 'click', handleAddScheduleBreak);
-
-        document.addEventListener('click', (event) => {
-            if (hamburgerBtn && dropdownMenu && dropdownMenu.classList.contains('show') && !hamburgerBtn.contains(event.target) && !dropdownMenu.contains(event.target)) {
-                dropdownMenu.classList.remove('show');
-            }
-        });
     }
 
-    // --- MODE SWITCHING ---
     function setMode(mode) {
         currentMode = mode;
+        localStorage.setItem('breakdownAppMode', mode);
         const container = document.getElementById('main-container');
         const assistantBtn = document.getElementById('assistant-mode-btn');
         const producerBtn = document.getElementById('producer-mode-btn');
+        if (!container || !assistantBtn || !producerBtn) return;
 
         if (mode === 'producer') {
             container.classList.add('producer-mode');
@@ -76,28 +72,23 @@ document.addEventListener('DOMContentLoaded', () => {
             assistantBtn.classList.add('active-mode');
             producerBtn.classList.remove('active-mode');
         }
-        // Re-render everything to show/hide cost inputs
-        renderBreakdowns();
-        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
-        if(activeSequence) calculateAndDisplayTotalCost(activeSequence);
+        calculateAndDisplayTotalCost();
     }
 
-    // --- UI CREATION ---
-    function createEntryGrid() {
-        const grid = document.getElementById('breakdown-entry-grid');
+    function createEntryGrid(gridId = 'breakdown-entry-grid', targetData = currentBreakdown) {
+        const grid = document.getElementById(gridId);
+        if (!grid) return;
         grid.innerHTML = '';
         CATEGORIES.forEach(cat => {
             const categoryDiv = document.createElement('div');
             categoryDiv.className = 'breakdown-entry-category';
             categoryDiv.style.borderTopColor = cat.color;
-            categoryDiv.innerHTML = `
-                <h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4>
+            categoryDiv.innerHTML = `<h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4>
                 <form class="add-item-form" data-category="${cat.key}">
                     <input type="text" placeholder="Add element..." required>
                     <button type="submit">Add</button>
                 </form>
-                <ul class="item-list-entry" id="entry-list-${cat.key}"></ul>
-            `;
+                <ul class="item-list-entry" id="list-${gridId}-${cat.key}"></ul>`;
             grid.appendChild(categoryDiv);
             
             categoryDiv.querySelector('.add-item-form').addEventListener('submit', (e) => {
@@ -105,199 +96,307 @@ document.addEventListener('DOMContentLoaded', () => {
                 const categoryKey = e.target.dataset.category;
                 const input = e.target.querySelector('input');
                 if (input.value.trim()) {
-                    addItemToCurrent(categoryKey, { name: input.value.trim(), cost: 0 });
+                    if (!targetData[categoryKey]) targetData[categoryKey] = [];
+                    targetData[categoryKey].push({ name: input.value.trim(), cost: 0 });
+                    renderItemList(`list-${gridId}-${cat.key}`, categoryKey, targetData);
                     input.value = '';
                 }
             });
+            renderItemList(`list-${gridId}-${cat.key}`, categoryKey, targetData);
         });
     }
     
-    function renderCurrentBreakdownList(categoryKey) {
-        const list = document.getElementById(`entry-list-${categoryKey}`);
+    function renderItemList(listId, categoryKey, data) {
+        const list = document.getElementById(listId);
+        if (!list) return;
         list.innerHTML = '';
-        if (currentBreakdown[categoryKey]) {
-            currentBreakdown[categoryKey].forEach((item, index) => {
+        if (data[categoryKey]) {
+            data[categoryKey].forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = 'tagged-item-entry';
-                li.innerHTML = `
-                    <span class="tagged-item-name"></span>
+                li.innerHTML = `<span class="tagged-item-name"></span>
                     <input type="number" class="cost-input" placeholder="Cost" min="0" step="0.01">
-                    <button type="button" class="delete-item-btn">&times;</button>
-                `;
+                    <button type="button" class="delete-item-btn">&times;</button>`;
                 li.querySelector('.tagged-item-name').textContent = item.name;
                 
                 const costInput = li.querySelector('.cost-input');
                 costInput.value = item.cost || '';
-                costInput.oninput = () => { item.cost = parseFloat(costInput.value) || 0; };
+                costInput.oninput = () => { 
+                    item.cost = parseFloat(costInput.value) || 0; 
+                    calculateAndDisplayTotalCost();
+                };
 
                 li.querySelector('.delete-item-btn').onclick = () => {
-                    currentBreakdown[categoryKey].splice(index, 1);
-                    renderCurrentBreakdownList(categoryKey);
+                    data[categoryKey].splice(index, 1);
+                    renderItemList(listId, categoryKey, data);
+                    calculateAndDisplayTotalCost();
                 };
                 list.appendChild(li);
             });
         }
     }
 
-    // --- CORE DATA HANDLING ---
-    function handleAddBreakdown(e) {
+    function handleAddBreakdownToSequence(e) {
         e.preventDefault();
-        let activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
+        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
         if (!activeSequence) {
-            if (confirm("No sequence created. Create 'Sequence 1' to add this breakdown?")) {
-                handleNewSequence();
-                activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
-                if(!activeSequence) return;
-            } else { return; }
+            alert("No active sequence. Please create or select a sequence from the side panel first.");
+            return;
         }
 
+        const sceneNumberInput = document.getElementById('scene-number');
+        if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; }
+        
         const sceneDetails = {
             id: Date.now(),
-            sceneNumber: document.getElementById('scene-number').value,
+            sceneNumber: sceneNumberInput.value,
             sceneType: document.getElementById('scene-type').value,
             sceneLocation: document.getElementById('scene-location').value,
             sceneTime: document.getElementById('scene-time').value,
         };
 
         const newBreakdown = { ...sceneDetails, ...currentBreakdown };
-        activeSequence.scenes.push(newBreakdown);
+        activeSequence.breakdowns.push(newBreakdown);
+        
         saveProjectData();
         renderBreakdowns();
-        
         currentBreakdown = {};
         document.getElementById('breakdown-form').reset();
-        CATEGORIES.forEach(cat => renderCurrentBreakdownList(cat.key));
+        createEntryGrid(); // Re-creates the main form with empty lists
     }
-
+    
     function renderBreakdowns() {
         const container = document.getElementById('breakdown-strips-container');
-        container.innerHTML = '';
+        const display = document.getElementById('active-sequence-display');
         const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
+        
         if (!activeSequence) {
-            document.getElementById('active-sequence-display').textContent = 'No active sequence selected.';
+            display.textContent = 'No active sequence. Create one from the side panel.';
+            container.innerHTML = '';
             return;
         }
 
-        document.getElementById('active-sequence-display').textContent = `Current Sequence: ${activeSequence.name}`;
+        display.textContent = `Current Sequence: ${activeSequence.name}`;
+        container.innerHTML = '';
+        if (!activeSequence.breakdowns) activeSequence.breakdowns = [];
         
-        activeSequence.scenes.forEach(breakdown => {
+        activeSequence.breakdowns.forEach(breakdown => {
             const stripWrapper = document.createElement('div');
             stripWrapper.className = 'breakdown-strip-wrapper';
-            
             let summaryHTML = '';
             CATEGORIES.forEach(cat => {
                 const count = breakdown[cat.key] ? breakdown[cat.key].length : 0;
                 if (count > 0) {
-                    summaryHTML += `<div class="strip-item-summary" style="color:${cat.color};">
-                        <i class="fas ${cat.icon}"></i><span class="count">${count}</span>
-                    </div>`;
+                    summaryHTML += `<div class="strip-item-summary" style="color:${cat.color};"><i class="fas ${cat.icon}"></i><span class="count">${count}</span></div>`;
                 }
             });
-
             stripWrapper.innerHTML = `
                 <div class="breakdown-strip">
-                    <div class="strip-item-scene">#${breakdown.sceneNumber} - ${breakdown.sceneLocation}</div>
+                    <div class="strip-item-scene">#${breakdown.sceneNumber} - ${breakdown.sceneLocation} (${breakdown.sceneTime})</div>
                     ${summaryHTML}
                 </div>
                 <div class="strip-actions">
                     <button class="edit-btn-strip" title="Edit Breakdown"><i class="fas fa-pencil-alt"></i></button>
-                    <button class="share-btn-strip" title="Share as Image"><i class="fas fa-share-alt"></i></button>
-                </div>
-            `;
+                </div>`;
             stripWrapper.querySelector('.edit-btn-strip').onclick = () => openEditModal(breakdown.id);
-            stripWrapper.querySelector('.share-btn-strip').onclick = () => shareSceneBreakdown(breakdown.id);
             container.appendChild(stripWrapper);
         });
-        calculateAndDisplayTotalCost(activeSequence);
+        calculateAndDisplayTotalCost();
     }
 
-    // --- COST CALCULATION & MODAL ---
-    function calculateAndDisplayTotalCost(activeSequence) {
+    function calculateAndDisplayTotalCost() {
         const display = document.getElementById('total-cost-display');
-        if (!activeSequence || currentMode !== 'producer') {
-            display.style.display = 'none';
-            return;
-        }
         let totalCost = 0;
-        activeSequence.scenes.forEach(scene => {
-            CATEGORIES.forEach(cat => {
-                if(scene[cat.key]){
-                    scene[cat.key].forEach(item => { totalCost += item.cost || 0; });
-                }
-            });
+        projectData.panelItems.forEach(item => {
+            if (item.type === 'sequence' && item.breakdowns) {
+                item.breakdowns.forEach(scene => {
+                    CATEGORIES.forEach(cat => {
+                        if(scene[cat.key]){
+                            scene[cat.key].forEach(item => { totalCost += item.cost || 0; });
+                        }
+                    });
+                });
+            }
         });
-        display.innerHTML = `<h3>Total Estimated Cost: <span>$${totalCost.toLocaleString()}</span></h3>`;
-        display.style.display = 'block';
+        display.innerHTML = `<h3>Total Estimated Cost: <span>$${totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></h3>`;
+    }
+
+    // --- Data Persistence ---
+    function saveProjectData() { localStorage.setItem('scriptBreakdownProject', JSON.stringify(projectData)); }
+
+    function loadProjectData() {
+        const savedData = localStorage.getItem('scriptBreakdownProject');
+        projectData = savedData ? JSON.parse(savedData) : { panelItems: [], activeItemId: null, projectInfo: {} };
+        if (!projectData.panelItems) projectData.panelItems = [];
+        if (!projectData.projectInfo) projectData.projectInfo = {};
+        if (projectData.activeItemId === null && projectData.panelItems.length > 0) {
+            const firstSeq = projectData.panelItems.find(i => i.type === 'sequence');
+            if (firstSeq) projectData.activeItemId = firstSeq.id;
+        }
+        renderBreakdowns();
+        renderSequencePanel();
+    }
+    
+    function clearProject() {
+        if(confirm("Are you sure? This will delete all sequences and breakdowns.")){
+            projectData = { panelItems: [], activeItemId: null, projectInfo: {} };
+            saveProjectData();
+            loadProjectData();
+        }
+    }
+
+    // --- File I/O ---
+    function saveProjectFile() {
+        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${(projectData.projectInfo.prodName || 'Breakdown').replace(/ /g, '_')}.filmbreakdown`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    
+    function openProjectFile(event) {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const loadedData = JSON.parse(e.target.result);
+                if (loadedData && loadedData.panelItems && loadedData.projectInfo) {
+                    projectData = loadedData;
+                    saveProjectData();
+                    alert('Project loaded successfully!');
+                    loadProjectData();
+                } else { alert('Error: Invalid project file format.'); }
+            } catch (error) { alert('Error: Could not read project file.'); }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    }
+
+    // --- Modals (Project Info, Edit, Cost Summary) ---
+    function openProjectInfoModal() {
+        const modal = document.getElementById('project-info-modal');
+        const { prodName = '', directorName = '' } = projectData.projectInfo;
+        modal.innerHTML = `
+            <div class="modal-content small">
+                <span class="close-btn">&times;</span>
+                <h3>Project Information</h3>
+                <div class="modal-form">
+                    <input type="text" id="modal-prod-name" placeholder="Production Name" value="${prodName}">
+                    <input type="text" id="modal-director-name" placeholder="Director Name" value="${directorName}">
+                    <button id="modal-save-info-btn" class="btn-primary">Save Info</button>
+                </div>
+            </div>`;
+        modal.style.display = 'block';
+        modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
+        modal.querySelector('#modal-save-info-btn').onclick = () => {
+            projectData.projectInfo.prodName = document.getElementById('modal-prod-name').value;
+            projectData.projectInfo.directorName = document.getElementById('modal-director-name').value;
+            saveProjectData();
+            modal.style.display = 'none';
+        };
+    }
+
+    function openEditModal(breakdownId) {
+        const modal = document.getElementById('edit-breakdown-modal');
+        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
+        if (!modal || !activeSequence) return;
+        const breakdown = activeSequence.breakdowns.find(b => b.id === breakdownId);
+        if (!breakdown) return;
+
+        modal.innerHTML = `
+            <div class="modal-content"><span class="close-btn">&times;</span>
+                <div class="modal-body">
+                    <h3>Edit Scene #${breakdown.sceneNumber}</h3>
+                    <div class="breakdown-grid" id="edit-breakdown-grid"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="delete-breakdown-btn" class="btn-danger">Delete Breakdown</button>
+                    <button id="share-breakdown-btn" class="btn-secondary">Share</button>
+                    <button id="save-changes-btn" class="btn-primary">Save Changes</button>
+                </div>
+            </div>`;
+        modal.style.display = 'block';
+        
+        let tempEditData = JSON.parse(JSON.stringify(breakdown));
+        createEntryGrid('edit-breakdown-grid', tempEditData);
+        
+        modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
+        modal.querySelector('#save-changes-btn').onclick = () => handleSaveChanges(breakdownId, tempEditData);
+        modal.querySelector('#delete-breakdown-btn').onclick = () => handleDelete(breakdownId);
+        modal.querySelector('#share-breakdown-btn').onclick = () => shareSceneBreakdown(tempEditData);
+    }
+    
+    function handleSaveChanges(id, updatedData) {
+        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
+        const breakdownIndex = activeSequence.breakdowns.findIndex(b => b.id === id);
+        if (breakdownIndex > -1) {
+            activeSequence.breakdowns[breakdownIndex] = { ...updatedData };
+            saveProjectData();
+            renderBreakdowns();
+            document.getElementById('edit-breakdown-modal').style.display = 'none';
+        }
+    }
+    
+    function handleDelete(id) {
+        if(confirm("Are you sure you want to delete this breakdown?")){
+            const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
+            activeSequence.breakdowns = activeSequence.breakdowns.filter(b => b.id !== id);
+            saveProjectData();
+            renderBreakdowns();
+            document.getElementById('edit-breakdown-modal').style.display = 'none';
+        }
     }
 
     function openProjectCostModal() {
-        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
-        if(!activeSequence) { alert("Please select a sequence to view its cost."); return; }
-
+        if(currentMode !== 'producer') { alert("Switch to Producer Mode to view costs."); return; }
         let totalCost = 0;
         const categoryCosts = {};
         CATEGORIES.forEach(cat => categoryCosts[cat.key] = 0);
-
-        activeSequence.scenes.forEach(scene => {
-            CATEGORIES.forEach(cat => {
-                if(scene[cat.key]){
-                    scene[cat.key].forEach(item => {
-                        const cost = item.cost || 0;
-                        categoryCosts[cat.key] += cost;
-                        totalCost += cost;
+        
+        projectData.panelItems.forEach(item => {
+            if (item.type === 'sequence' && item.breakdowns) {
+                item.breakdowns.forEach(scene => {
+                    CATEGORIES.forEach(cat => {
+                        if(scene[cat.key]){
+                            scene[cat.key].forEach(item => {
+                                const cost = item.cost || 0;
+                                categoryCosts[cat.key] += cost;
+                                totalCost += cost;
+                            });
+                        }
                     });
-                }
-            });
+                });
+            }
         });
-
+        
         const modal = document.getElementById('project-cost-modal');
         let tableHTML = `<table class="cost-summary-table">`;
         CATEGORIES.forEach(cat => {
             if(categoryCosts[cat.key] > 0){
-                tableHTML += `<tr><td>${cat.title}</td><td>$${categoryCosts[cat.key].toLocaleString()}</td></tr>`;
+                tableHTML += `<tr><td>${cat.title}</td><td>$${categoryCosts[cat.key].toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td></tr>`;
             }
         });
-        tableHTML += `<tr style="font-size: 1.2rem; border-top: 2px solid var(--border-color);"><td><strong>Grand Total</strong></td><td><strong>$${totalCost.toLocaleString()}</strong></td></tr>`;
-        tableHTML += `</table>`;
-
-        modal.innerHTML = `
-            <div class="modal-content small">
-                <span class="close-btn">&times;</span>
-                <h3>Cost Summary for "${activeSequence.name}"</h3>
-                ${tableHTML}
-            </div>
-        `;
+        tableHTML += `<tr style="font-size: 1.2rem; border-top: 2px solid var(--border-color);"><td><strong>Grand Total</strong></td><td><strong>$${totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></td></tr></table>`;
+        modal.innerHTML = `<div class="modal-content small"><span class="close-btn">&times;</span><h3>Project Cost Summary</h3>${tableHTML}</div>`;
         modal.style.display = 'block';
         modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
     }
-    
-    // --- All other functions are provided below, complete and verified ---
-    function initializeDragAndDrop() {
-        const listContainer = document.getElementById('sequence-list');
-        if (listContainer) {
-            new Sortable(listContainer, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                onEnd: (evt) => {
-                    const item = projectData.panelItems.splice(evt.oldIndex, 1)[0];
-                    projectData.panelItems.splice(evt.newIndex, 0, item);
-                    saveProjectData();
-                }
-            });
-        }
-    }
 
+    // --- Sequence Panel Logic ---
     function handleNewSequence() {
         let name = prompt("Enter a name for the new sequence:");
         if (name === null) return;
         if (name.trim() === "") name = `Sequence ${projectData.panelItems.filter(i => i.type === 'sequence').length + 1}`;
-        const newItem = { type: 'sequence', id: Date.now(), name: name, scenes: [] };
+        const newItem = { type: 'sequence', id: Date.now(), name: name, breakdowns: [] };
         projectData.panelItems.push(newItem);
         setActiveItem(newItem.id);
+        document.getElementById('sequence-panel').classList.remove('open');
     }
-    
+
     function handleAddScheduleBreak() {
-        let name = prompt("Enter name for the schedule break (e.g., DAY 1):");
+        let name = prompt("Enter a name for the schedule break (e.g., DAY 1):");
         if (name === null || name.trim() === "") return;
         const newItem = { type: 'schedule_break', id: Date.now(), name: name };
         projectData.panelItems.push(newItem);
@@ -312,10 +411,9 @@ document.addEventListener('DOMContentLoaded', () => {
             saveProjectData();
             renderBreakdowns();
             renderSequencePanel();
-            document.getElementById('sequence-panel').classList.remove('open');
         }
     }
-
+    
     function renderSequencePanel() {
         const listContainer = document.getElementById('sequence-list');
         listContainer.innerHTML = '';
@@ -324,7 +422,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (item.type === 'sequence') {
                 element.className = `sequence-item ${item.id === projectData.activeItemId ? 'active' : ''}`;
                 element.textContent = item.name;
-                element.onclick = () => setActiveItem(item.id);
+                element.onclick = () => {
+                    setActiveItem(item.id);
+                    document.getElementById('sequence-panel').classList.remove('open');
+                };
             } else if (item.type === 'schedule_break') {
                 element.className = 'schedule-break-item';
                 element.textContent = item.name;
@@ -333,143 +434,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function saveProjectData() { localStorage.setItem('scriptBreakdownProject', JSON.stringify(projectData)); }
-
-    function loadProjectData() {
-        const savedData = localStorage.getItem('scriptBreakdownProject');
-        projectData = savedData ? JSON.parse(savedData) : { panelItems: [], activeItemId: null, projectInfo: {} };
-        if (!projectData.projectInfo) projectData.projectInfo = {};
-        if (!projectData.panelItems) projectData.panelItems = [];
-        if (!projectData.activeItemId && projectData.panelItems.length > 0) {
-            const firstSequence = projectData.panelItems.find(i => i.type === 'sequence');
-            if (firstSequence) projectData.activeItemId = firstSequence.id;
-        }
-        renderBreakdowns();
-        renderSequencePanel();
-    }
-
-    function clearProject() {
-        if(confirm("Are you sure you want to clear all breakdown data?")){
-            projectData = { panelItems: [], activeItemId: null, projectInfo: {} };
-            saveProjectData();
-            renderBreakdowns();
-            renderSequencePanel();
-        }
-    }
-
-    function openProjectModal() {
-        const modal = document.getElementById('project-info-modal');
-        const projectInfo = projectData.projectInfo || {};
-        modal.innerHTML = `
-            <div class="modal-content small">
-                <span class="close-btn">&times;</span>
-                <h3>Project Information</h3>
-                <div class="modal-form">
-                    <input type="text" id="modal-prod-name" placeholder="Production / Studio Name" value="${projectInfo.prodName || ''}">
-                    <input type="text" id="modal-director-name" placeholder="Director Name" value="${projectInfo.directorName || ''}">
-                    <button id="modal-save-info-btn" class="btn-primary">Save Info</button>
-                </div>
-            </div>`;
-        modal.style.display = 'block';
-        modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
-        modal.querySelector('#modal-save-info-btn').onclick = () => {
-            projectData.projectInfo.prodName = document.getElementById('modal-prod-name').value;
-            projectData.projectInfo.directorName = document.getElementById('modal-director-name').value;
-            saveProjectData();
-            modal.style.display = 'none';
-        };
-    }
-
-    function openProjectFile(event) {
-        const file = event.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const loadedData = JSON.parse(e.target.result);
-                if (loadedData && loadedData.panelItems) {
-                    projectData = loadedData;
-                    saveProjectData();
-                    alert('Project loaded successfully!');
-                    loadProjectData();
-                } else { alert('Error: Invalid project file format.'); }
-            } catch (error) { alert('Error: Could not read project file.'); }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
-    }
-
-    function saveProjectFile() {
-        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectData.projectInfo.prodName || 'Breakdown'}.filmbreakdown`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }
+    // Placeholder for Excel export
+    function saveAsExcel() { alert('Excel export feature coming soon!'); }
     
-    function saveAsExcel() {
-        if (projectData.panelItems.length === 0) { alert("No data to export."); return; }
-        const workbook = XLSX.utils.book_new();
-        
-        projectData.panelItems.forEach(item => {
-            if (item.type === 'sequence' && item.scenes.length > 0) {
-                const dataForSheet = item.scenes.map(b => {
-                    let row = { 'Scene #': b.sceneNumber, 'Scene Heading': `${b.sceneType}. ${b.sceneLocation} - ${b.sceneTime}` };
-                    CATEGORIES.forEach(cat => {
-                        row[cat.title] = b[cat.key] ? b[cat.key].map(i => `${i.name} ($${i.cost || 0})`).join(', ') : '';
-                    });
-                    return row;
-                });
-                const worksheet = XLSX.utils.json_to_sheet(dataForSheet);
-                XLSX.utils.book_append_sheet(workbook, worksheet, item.name.replace(/[/\\?*:[\]]/g, ''));
-            }
-        });
-
-        if (workbook.SheetNames.length > 0) {
-            XLSX.writeFile(workbook, `${projectData.projectInfo.prodName || 'FullBreakdown'}.xlsx`);
-        } else {
-            alert("No scenes found in any sequence to export.");
-        }
-    }
-    
-    async function shareSceneBreakdown(id) {
-        const activeSequence = projectData.panelItems.find(item => item.id === projectData.activeItemId);
-        if(!activeSequence) return;
-        const breakdown = activeSequence.scenes.find(b => b.id === id);
-        if (!breakdown) return;
-        
-        const template = document.getElementById('share-card-template');
+    // Placeholder for Sharing
+    async function shareSceneBreakdown(breakdown) { 
+        const {prodName = 'Production'} = projectData.projectInfo;
+        const card = document.getElementById('share-card-template');
         let gridHTML = '';
         CATEGORIES.forEach(cat => {
             if (breakdown[cat.key] && breakdown[cat.key].length > 0) {
-                gridHTML += `<div class="share-card-category">
-                    <h4>${cat.title}</h4>
-                    <ul class="share-card-list">
-                        ${breakdown[cat.key].map(item => `<li>${item.name} ${currentMode === 'producer' ? `($${item.cost || 0})` : ''}</li>`).join('')}
-                    </ul>
-                </div>`;
+                gridHTML += `<div class="share-card-category"><h4>${cat.title}</h4><ul class="share-card-list">${breakdown[cat.key].map(i => `<li>${i.name}</li>`).join('')}</ul></div>`
             }
         });
-        template.innerHTML = `
-            <div class="share-card-content">
-                <div class="share-card-header">
-                    <h1>Scene #${breakdown.sceneNumber}</h1>
-                    <p>${breakdown.sceneType}. ${breakdown.sceneLocation} - ${breakdown.sceneTime}</p>
-                </div>
-                <div class="share-card-grid">${gridHTML}</div>
-            </div>`;
-        try {
-            const canvas = await html2canvas(template, { scale: 2 });
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-            const file = new File([blob], `breakdown_scene_${breakdown.sceneNumber}.png`, { type: 'image/png' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: `Breakdown for Scene ${breakdown.sceneNumber}` });
-            } else {
-                window.open(URL.createObjectURL(blob));
-            }
-        } catch (error) { console.error('Sharing failed:', error); }
-    }
 
+        card.innerHTML = `<div class="share-card-header"><h1>${prodName}</h1><p>Breakdown for Scene #${breakdown.sceneNumber}</p></div><div class="share-card-grid">${gridHTML}</div>`;
+        try {
+            const canvas = await html2canvas(card);
+            canvas.toBlob(blob => {
+                const file = new File([blob], `Breakdown_Scene_${breakdown.sceneNumber}.png`, {type: 'image/png'});
+                if (navigator.canShare && navigator.canShare({files: [file]})) {
+                    navigator.share({
+                        title: `Breakdown: Scene ${breakdown.sceneNumber}`,
+                        files: [file]
+                    });
+                } else {
+                   alert('Sharing not supported on this browser.');
+                }
+            });
+        } catch(e) {
+            console.error(e);
+            alert('Could not generate shareable image.');
+        }
+    }
+    
     initialize();
 });
