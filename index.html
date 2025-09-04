@@ -42,6 +42,14 @@
                     <a id="about-btn"><i class="fas fa-user-friends"></i> About</a>
                 </div>
             </div>
+             <div id="currency-selector-wrapper" style="display: none;">
+                <select id="currency-selector">
+                    <option value="USD">$ USD</option>
+                    <option value="EUR">€ EUR</option>
+                    <option value="GBP">£ GBP</option>
+                    <option value="INR">₹ INR</option>
+                </select>
+            </div>
         </div>
         <div class="header-center">
             <h2 id="app-title">Script Breakdown</h2>
@@ -59,15 +67,6 @@
             <div class="section" id="breakdown-tool">
                 <div class="top-controls">
                     <div id="active-sequence-display">No active sequence.</div>
-                    <div id="currency-selector-wrapper" style="display: none;">
-                        <label for="currency-selector">Currency: </label>
-                        <select id="currency-selector">
-                            <option value="USD">$ USD</option>
-                            <option value="EUR">€ EUR</option>
-                            <option value="GBP">£ GBP</option>
-                            <option value="INR">₹ INR</option>
-                        </select>
-                    </div>
                 </div>
                 <div id="breakdown-strips-container"></div>
                 <form id="breakdown-form" class="new-item-form">
