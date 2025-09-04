@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -25,6 +25,7 @@
                 <button id="hamburger-btn" class="icon-btn"><i class="fas fa-bars"></i></button>
                 <div id="dropdown-menu" class="dropdown-content">
                     <a id="project-info-btn"><i class="fas fa-info-circle"></i> Project Info</a>
+                    <a id="new-sequence-btn"><i class="fas fa-film"></i> New Sequence</a>
                     <a id="open-project-btn"><i class="fas fa-folder-open"></i> Open Project</a>
                     <a id="save-project-btn"><i class="fas fa-save"></i> Save Project</a>
                     <hr class="dropdown-divider">
@@ -98,10 +99,13 @@
 
     <!-- Side Panel for Sequences & Filters -->
     <div id="sequence-panel" class="side-panel">
-        <div class="panel-header"><h3>Sequences & Filters</h3><button id="close-panel-btn" class="icon-btn small">&times;</button></div>
-        <div class="panel-content">
-            <button id="new-sequence-btn" class="btn-primary">New Sequence</button>
-            <button id="add-schedule-break-btn" class="btn-secondary">Add Schedule Break</button>
+        <div class="panel-header">
+            <h3>Sequences & Filters</h3>
+            <div class="panel-header-actions">
+                <button id="add-schedule-break-btn" class="icon-btn small" title="Add Schedule Break"><i class="fas fa-plus"></i></button>
+                <button id="export-panel-btn" class="icon-btn small" title="Export Filtered Scenes as Excel"><i class="fas fa-download"></i></button>
+                <button id="close-panel-btn" class="icon-btn small">&times;</button>
+            </div>
         </div>
         <div class="panel-filter-section">
             <h4>Filter Breakdowns</h4>
@@ -114,7 +118,7 @@
     <!-- Modals & Templates -->
     <div id="edit-breakdown-modal" class="modal"></div>
     <div id="project-info-modal" class="modal"></div>
-    <div id="share-card-template"></div>
+    <div id="share-card-template" style="position: absolute; left: -9999px; width: 450px;"></div>
 
     <script src="script.js" defer></script>
 </body>
