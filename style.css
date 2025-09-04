@@ -49,6 +49,9 @@ button, .btn-secondary { padding: 10px 20px; border-radius: 6px; font-size: 1rem
 .dropdown-header { padding: 8px 20px; font-size: 0.8rem; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; cursor: default; }
 .dropdown-divider { border: none; height: 1px; background-color: var(--border-color); margin: 8px 0; }
 .show { display: block; }
+.auto-save-status { margin-left: auto; font-size: 0.8rem; padding: 2px 8px; border-radius: 10px; }
+.auto-save-status.off { background-color: var(--danger-color); color: white; }
+.auto-save-status.on { background-color: var(--success-color); color: white; }
 .top-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 #active-sequence-display { font-size: 1.2rem; color: var(--primary-color); font-weight: 600; }
 #breakdown-strips-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 30px; }
@@ -81,8 +84,10 @@ button, .btn-secondary { padding: 10px 20px; border-radius: 6px; font-size: 1rem
 .sequence-total span { color: var(--success-color); }
 .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7); animation: fadeIn 0.3s; }
 .modal-content { background-color: var(--surface-color); margin: 5% auto; padding: 30px; border: 1px solid var(--border-color); width: 90%; max-width: 1200px; border-radius: 12px; position: relative; max-height: 85vh; display: flex; flex-direction: column; }
-.modal-content.small { max-width: 450px; }
+.modal-content.small { max-width: 500px; }
 .modal-body { overflow-y: auto; }
+.info-content p { line-height: 1.6; margin: 0 0 12px; }
+.info-content strong { color: var(--primary-color); display: inline-block; width: 120px; }
 .close-btn { color: #aaa; position: absolute; top: 10px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color); }
 .modal-form { display: flex; flex-direction: column; gap: 15px; }
