@@ -75,6 +75,7 @@ button, .btn-secondary { padding: 10px 20px; border-radius: 6px; font-size: 1rem
 .sequence-item:hover { background-color: var(--background-color); }
 .sequence-item.active { background-color: var(--primary-color); font-weight: bold; }
 .schedule-break-item { background-color: var(--background-color); font-weight: bold; text-transform: uppercase; font-size: 0.8rem; color: #9ca3af; margin-top: 10px; cursor: default; }
+.sortable-ghost { opacity: 0.4; background: var(--primary-color); }
 .sequence-total { display: none; margin-top: 20px; padding: 15px; background-color: var(--background-color); border-radius: 8px; text-align: right; font-size: 1.2rem; font-weight: bold; }
 .producer-mode .sequence-total { display: block; }
 .sequence-total span { color: var(--success-color); }
@@ -101,4 +102,3 @@ button, .btn-secondary { padding: 10px 20px; border-radius: 6px; font-size: 1rem
 .export-buttons { display: flex; gap: 10px; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 768px) { .form-grid-condensed { grid-template-columns: 1fr 1fr; gap: 10px; } .breakdown-grid { grid-template-columns: 1fr; } .breakdown-strip { flex-wrap: wrap; white-space: normal; } .page-header { flex-wrap: wrap; } .total-cost-final { flex-direction: column; gap: 15px; align-items: stretch; text-align: center; } }
-
