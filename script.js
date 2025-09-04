@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function createEntryGrid(gridId, targetData) {
+ function createEntryGrid(gridId, targetData) {
         const grid = document.getElementById(gridId);
         if (!grid) return;
         grid.innerHTML = '';
@@ -151,17 +151,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<form class="add-item-form producer-form" data-category="${cat.key}">
                     <input type="text" placeholder="Item Name" class="item-name-input" required>
                     <input type="number" placeholder="Cost" min="0" step="0.01" class="item-cost-input">
-                    <button type="submit">Add</button>
+                    <button type="submit" class="btn-primary">Add</button>
                 </form>` :
                 `<form class="add-item-form" data-category="${cat.key}">
                     <input type="text" placeholder="Add element..." required>
-                    <button type="submit">Add</button>
+                    <button type="submit" class="btn-primary">Add</button>
                 </form>`;
 
             const categoryDiv = document.createElement('div');
             categoryDiv.className = 'breakdown-entry-category';
             categoryDiv.style.borderTopColor = cat.color;
-            categoryDiv.innerHTML = `<h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4> ${formHTML} <ul class="item-list-entry" id="list-${gridId}-${cat.key}"></ul>`;
+            categoryDiv.innerHTML = `
+                <h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4>
+                ${formHTML}
+                <ul class="item-list-entry" id="list-${gridId}-${cat.key}"></ul>`;
             grid.appendChild(categoryDiv);
             
             categoryDiv.querySelector('.add-item-form').addEventListener('submit', (e) => {
@@ -169,19 +172,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 const categoryKey = e.target.dataset.category;
                 const nameInput = e.target.querySelector('.item-name-input, input[type="text"]');
                 const costInput = e.target.querySelector('.item-cost-input');
+                
                 if (nameInput.value.trim()) {
                     if (!targetData[categoryKey]) targetData[categoryKey] = [];
-                    targetData[categoryKey].push({ id: Date.now(), name: nameInput.value.trim(), cost: costInput ? parseFloat(costInput.value) || 0 : 0 });
-                    renderItemList(`list-${gridId}-${cat.key}`, categoryKey, targetData);
+                    const newItem = {
+                        id: Date.now(),
+                        name: nameInput.value.trim(),
+                        cost: costInput ? parseFloat(costInput.value) || 0 : 0
+                    };
+                    targetData[categoryKey].push(newItem);
+                    // *** THIS IS THE FIX: The `cat.key` is now correctly passed to render the list ***
+                    renderItemList(`list-${gridId}-${cat.key}`, cat.key, targetData);
                     nameInput.value = '';
                     if (costInput) costInput.value = '';
                 }
             });
 
+            // Pre-fill Miscellaneous for new breakdowns
             if (gridId === 'breakdown-entry-grid' && cat.key === 'misc' && (!targetData.misc || targetData.misc.length === 0)) {
-                targetData.misc = [ {id: Date.now()+1, name: "Food", cost: 0}, {id: Date.now()+2, name: "Logistics", cost: 0}, {id: Date.now()+3, name: "Accommodation", cost: 0} ];
+                targetData.misc = [
+                    {id: Date.now()+1, name: "Food", cost: 0},
+                    {id: Date.now()+2, name: "Logistics", cost: 0},
+                    {id: Date.now()+3, name: "Accommodation", cost: 0}
+                ];
             }
-            renderItemList(`list-${gridId}-${cat.key}`, categoryKey, targetData);
+            // *** THIS IS THE FIX: Using `cat.key` instead of an undefined variable ***
+            renderItemList(`list-${gridId}-${cat.key}`, cat.key, targetData);
         });
     }
 
