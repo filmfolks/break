@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         safeAddListener('currency-selector', 'change', (e) => { projectData.projectInfo.currency = e.target.value; saveProjectData(); showView(currentView); renderBreakdownStrips(); });
         safeAddListener('close-panel-btn', 'click', () => document.getElementById('sequence-panel').classList.remove('open'));
         safeAddListener('add-schedule-break-btn', 'click', handleAddScheduleBreak);
-        safeAddListener('export-panel-btn', 'click', () => saveAsExcel(false));
+        safeAddListener('export-panel-btn', 'click', exportFilteredToExcel);
         safeAddListener('filter-category-select', 'change', handleFilterChange);
         safeAddListener('filter-value-input', 'input', () => renderBreakdownStrips());
         safeAddListener('export-excel-btn', 'click', exportEstimateToExcel);
@@ -62,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NEW: THE INTELLIGENT TRANSLATOR/MIGRATION FUNCTION ---
     function migrateToSchedDataToUniversal(oldData) {
         console.log("Old To Sched file detected. Migrating to universal format...");
         const newData = {
@@ -113,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return newData;
     }
 
-    // --- UNIVERSAL DATA HANDLING (MODIFIED) ---
     function getPanelItems() { if (!projectData.appSpecificData) { projectData.appSpecificData = { toMake: { panelItems: [] } }; } if (!projectData.appSpecificData.toMake) { projectData.appSpecificData.toMake = { panelItems: [] }; } return projectData.appSpecificData.toMake.panelItems; }
     function saveProjectData() { localStorage.setItem('universalFilmProject', JSON.stringify(projectData)); }
     function loadProjectData() {
@@ -152,8 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveProjectFile() { const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${(projectData.projectInfo.projectName || 'Project')}.filmproj`; a.click(); URL.revokeObjectURL(url); }
     
-    // --- CORE LOGIC & RENDERING ---
-    function handleAddSceneToSequence(e) { e.preventDefault(); const activeSequence = getPanelItems().find(item => item.id === activeSequenceId); if (!activeSequence) { alert("No active sequence. Please create or select one first."); return; } const sceneNumberInput = document.getElementById('scene-number'); if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; } const newScene = { sceneId: `s_${Date.now()}`, sceneNumber: sceneNumberInput.value, sceneType: document.getElementById('scene-type').value, sceneSetting: document.getElementById(''scene-setting'').value, dayNight: document.getElementById('scene-time').value, description: "", breakdownData: JSON.parse(JSON.stringify(currentBreakdown)), budgetingData: {}, schedulingData: {} }; projectData.scenes.push(newScene); if (!activeSequence.sceneIds) activeSequence.sceneIds = []; activeSequence.sceneIds.push(newScene.sceneId); saveProjectData(); renderBreakdownStrips(); currentBreakdown = {}; document.getElementById('breakdown-form').reset(); createEntryGrid('breakdown-entry-grid', currentBreakdown); }
+    function handleAddSceneToSequence(e) { e.preventDefault(); const activeSequence = getPanelItems().find(item => item.id === activeSequenceId); if (!activeSequence) { alert("No active sequence. Please create or select one first."); return; } const sceneNumberInput = document.getElementById('scene-number'); if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; } const newScene = { sceneId: `s_${Date.now()}`, sceneNumber: sceneNumberInput.value, sceneType: document.getElementById('scene-type').value, sceneSetting: document.getElementById('scene-location').value, dayNight: document.getElementById('scene-time').value, description: "", breakdownData: JSON.parse(JSON.stringify(currentBreakdown)), budgetingData: {}, schedulingData: {} }; projectData.scenes.push(newScene); if (!activeSequence.sceneIds) activeSequence.sceneIds = []; activeSequence.sceneIds.push(newScene.sceneId); saveProjectData(); renderBreakdownStrips(); currentBreakdown = {}; document.getElementById('breakdown-form').reset(); createEntryGrid('breakdown-entry-grid', currentBreakdown); }
     function renderBreakdownStrips() { const container = document.getElementById('breakdown-strips-container'); const display = document.getElementById('active-sequence-display'); const activeSequence = getPanelItems().find(item => item.id === activeSequenceId); if (!activeSequence) { display.textContent = 'No active sequence. Create one from the side panel.'; container.innerHTML = ''; calculateAndRenderSequenceTotal(); return; } display.textContent = `Current Sequence: ${activeSequence.name}`; container.innerHTML = ''; const sceneIdsInSequence = activeSequence.sceneIds || []; const breakdowns = projectData.scenes.filter(s => sceneIdsInSequence.includes(s.sceneId)); const filteredBreakdowns = getFilteredBreakdowns(breakdowns); filteredBreakdowns.forEach(scene => { const stripWrapper = document.createElement('div'); stripWrapper.className = 'breakdown-strip-wrapper'; let summaryHTML = ''; let sceneTotalCost = 0; const breakdownData = scene.breakdownData || {}; CATEGORIES.forEach(cat => { const items = breakdownData[cat.key]; if (items && items.length > 0) { summaryHTML += `<div class="strip-item-summary" style="color:${cat.color};"><i class="fas ${cat.icon}"></i><span class="count">${items.length}</span></div>`; sceneTotalCost += items.reduce((sum, item) => sum + (item.cost || 0), 0); } }); const costHTML = `<div class="strip-item-cost">${formatCurrency(sceneTotalCost)}</div>`; stripWrapper.innerHTML = `<div class="breakdown-strip"><div class="strip-item-scene">#${scene.sceneNumber} - ${scene.sceneSetting} (${scene.dayNight})</div>${summaryHTML}${costHTML}</div><div class="strip-actions"><button class="share-btn-strip" data-id="${scene.sceneId}" title="Share Scene as Excel"><i class="fas fa-file-excel"></i></button><button class="edit-btn-strip" data-id="${scene.sceneId}" title="Edit Breakdown"><i class="fas fa-pencil-alt"></i></button><button class="delete-btn-strip" data-id="${scene.sceneId}" title="Delete Scene"><i class="fas fa-trash"></i></button></div>`; container.appendChild(stripWrapper); }); container.querySelectorAll('.edit-btn-strip').forEach(b => b.onclick = () => openEditModal(b.dataset.id)); container.querySelectorAll('.delete-btn-strip').forEach(b => b.onclick = () => handleDelete(b.dataset.id)); container.querySelectorAll('.share-btn-strip').forEach(b => b.onclick = () => shareSceneAsExcel(b.dataset.id)); calculateAndRenderSequenceTotal(); }
     function openEditModal(sceneId) { const modal = document.getElementById('edit-breakdown-modal'); const scene = projectData.scenes.find(s => s.sceneId === sceneId); if (!modal || !scene) return; modal.innerHTML = `<div class="modal-content"><span class="close-btn">&times;</span><div class="modal-body"><h3>Edit Scene #${scene.sceneNumber}</h3><div class="breakdown-grid" id="edit-breakdown-grid"></div></div><div class="modal-actions"><button id="save-changes-btn" class="btn-primary">Save Changes</button></div></div>`; modal.style.display = 'block'; let tempEditData = JSON.parse(JSON.stringify(scene.breakdownData || {})); createEntryGrid('edit-breakdown-grid', tempEditData); modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none'; modal.querySelector('#save-changes-btn').onclick = () => { scene.breakdownData = tempEditData; saveProjectData(); renderBreakdownStrips(); modal.style.display = 'none'; }; }
     function handleDelete(sceneId) { if (confirm("Are you sure you want to delete this scene from the project? This cannot be undone.")) { projectData.scenes = projectData.scenes.filter(s => s.sceneId !== sceneId); getPanelItems().forEach(item => { if (item.type === 'sequence' && item.sceneIds) { item.sceneIds = item.sceneIds.filter(id => id !== sceneId); } }); saveProjectData(); renderBreakdownStrips(); } }
@@ -184,42 +181,29 @@ document.addEventListener('DOMContentLoaded', () => {
     function openInfoModal() { const modal = document.getElementById('info-modal'); modal.innerHTML = `<div class="modal-content small"><span class="close-btn" onclick="this.parentElement.parentElement.style.display='none'">&times;</span><h3>App Guide</h3><div class="modal-body info-content"><p><strong>Assistant Mode:</strong> A clean view for tagging script elements without seeing costs.</p><p><strong>Producer Mode:</strong> Unlocks cost fields for every item, a currency selector, and the main Estimation page for budgeting.</p><p><strong>Estimate Page:</strong> Aggregates all costs into a scene-by-scene report. Visible only in Producer Mode.</p><p><strong>Side Panel:</strong> Organize your project with Sequences and Schedule Breaks. You can also filter all scenes by a specific category element.</p><p><strong>Save Full Excel:</strong> Exports all sequences and their breakdowns into a single Excel file with multiple sheets.</p><p><strong>Share Scene:</strong> Exports a detailed breakdown of a single scene to an Excel file.</p></div></div>`; modal.style.display = 'block'; }
     function openAboutModal() { const modal = document.getElementById('about-modal'); modal.innerHTML = `<div class="modal-content small"><span class="close-btn" onclick="this.parentElement.parentElement.style.display='none'">&times;</span><h3 style="text-align:center;">About To Make</h3><p style="font-size: 1.2rem; text-align: center;">Designed by Thosho Tech</p></div>`; modal.style.display = 'block'; }
     
-    // --- NEW: ADVANCED EXCEL EXPORT ---
+    // --- NEW: ADVANCED EXCEL EXPORT (Corrected) ---
     function saveAsExcel(isFullProject = true) {
-        if (!isFullProject) {
-            exportFilteredToExcel();
-            return;
-        }
+        if (!isFullProject) { exportFilteredToExcel(); return; }
         const wb = XLSX.utils.book_new();
         let grandTotal = 0;
         let currentScheduleBreak = "N/A";
-
         const panelItems = getPanelItems();
-        if(panelItems.length === 0){
-            alert("No sequences to export.");
-            return;
-        }
-
+        if (panelItems.length === 0) { alert("No sequences to export."); return; }
         panelItems.forEach(pItem => {
-            if (pItem.type === 'schedule_break') {
-                currentScheduleBreak = pItem.name;
-            } else if (pItem.type === 'sequence') {
+            if (pItem.type === 'schedule_break') { currentScheduleBreak = pItem.name; } 
+            else if (pItem.type === 'sequence') {
                 const sceneIds = pItem.sceneIds || [];
                 const breakdownsInSequence = projectData.scenes.filter(s => sceneIds.includes(s.sceneId));
-                
                 if (breakdownsInSequence.length > 0) {
                     const data = [];
                     let sequenceTotal = 0;
-                    
                     data.push([`Project: ${projectData.projectInfo.prodName || 'N/A'}`]);
                     data.push([`Schedule Break: ${currentScheduleBreak}`]);
                     data.push([`Sequence: ${pItem.name}`]);
                     data.push([]);
-                    
                     const headers = ['Scene #', 'Location', ...CATEGORIES.map(c => c.title)];
                     if (currentMode === 'producer') headers.push('Scene Total');
                     data.push(headers);
-                    
                     breakdownsInSequence.forEach(b => {
                         let sceneTotal = 0;
                         const row = [b.sceneNumber, b.sceneSetting];
@@ -234,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         data.push(row);
                         sequenceTotal += sceneTotal;
                     });
-
                     if (currentMode === 'producer') {
                         data.push([]);
                         const totalRow = new Array(headers.length).fill('');
@@ -245,24 +228,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     const ws = XLSX.utils.aoa_to_sheet(data);
                     ws['!cols'] = headers.map(h => ({ wch: h.length < 15 ? 15 : h.length + 2 }));
-                    XLSX.utils.book_append_sheet(wb, ws, pItem.name.replace(/[/\\?*:[\]]/g, ''));
+                    XLSX.utils.book_append_sheet(wb, ws, pItem.name.replace(/[/\\?*:[\]]/g, '').substring(0, 31));
                 }
             }
         });
-
-        if (currentMode === 'producer' && wb.SheetNames.length > 0) {
-            const summaryData = [['GRAND TOTAL', grandTotal]];
-            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-            XLSX.utils.book_append_sheet(wb, summaryWs, "Total");
-        }
-        
-        if (wb.SheetNames.length === 0) {
-            alert("No breakdowns to export.");
-            return;
-        }
-
+        if (currentMode === 'producer' && wb.SheetNames.length > 0) { const summaryData = [['GRAND TOTAL', grandTotal]]; const summaryWs = XLSX.utils.aoa_to_sheet(summaryData); XLSX.utils.book_append_sheet(wb, summaryWs, "Total"); }
+        if (wb.SheetNames.length === 0) { alert("No breakdowns to export."); return; }
         XLSX.writeFile(wb, `${(projectData.projectInfo.prodName || 'Full_Project_Breakdown')}.xlsx`);
     }
 
+    // This is the single most important line that was missing.
     initialize();
 });
