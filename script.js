@@ -62,21 +62,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NEW: THE TRANSLATOR/MIGRATION FUNCTION ---
+    // --- NEW: THE INTELLIGENT TRANSLATOR/MIGRATION FUNCTION ---
     function migrateToSchedDataToUniversal(oldData) {
         console.log("Old To Sched file detected. Migrating to universal format...");
+
         const newData = {
             fileVersion: "1.0",
             projectInfo: oldData.projectInfo || { projectName: "Untitled Project", currency: "USD" },
             scenes: [],
             appSpecificData: {
                 toMake: { panelItems: [], activeItemId: null },
-                toSched: { panelItems: oldData.panelItems, activeItemId: oldData.activeItemId }
+                toSched: { panelItems: [], activeItemId: oldData.activeItemId }
             }
         };
+
         const allScenesMap = new Map();
+
+        // Step 1: Extract all unique scenes from the old structure
         oldData.panelItems.forEach(item => {
-            if (item.type === 'sequence' && item.scenes) {
+            if (item.type === 'sequence' && Array.isArray(item.scenes)) {
                 item.scenes.forEach(scene => {
                     if (!allScenesMap.has(scene.id)) {
                         allScenesMap.set(scene.id, scene);
@@ -84,7 +88,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
+
+        // Step 2: Convert the unique scenes into the new universal format
         allScenesMap.forEach(oldScene => {
+            // Convert comma-separated cast string into a tagged-item array
+            const castArray = (oldScene.cast || '')
+                .split(',')
+                .map(name => name.trim())
+                .filter(name => name)
+                .map(name => ({ id: Date.now() + Math.random(), name: name, cost: 0 }));
+
             const newScene = {
                 sceneId: `s_${oldScene.id}`,
                 sceneNumber: oldScene.number,
@@ -92,33 +105,34 @@ document.addEventListener('DOMContentLoaded', () => {
                 sceneSetting: oldScene.sceneSetting,
                 dayNight: oldScene.dayNight,
                 description: oldScene.description,
-                breakdownData: {},
+                breakdownData: {
+                    cast: castArray // Populate cast from old data
+                },
                 budgetingData: {},
                 schedulingData: {
-                    status: oldScene.status,
-                    date: oldScene.date,
-                    time: oldScene.time,
-                    pages: oldScene.pages,
-                    duration: oldScene.duration,
-                    equipment: oldScene.equipment,
-                    shootLocation: oldScene.shootLocation,
-                    contact: oldScene.contact
+                    status: oldScene.status, date: oldScene.date, time: oldScene.time,
+                    pages: oldScene.pages, duration: oldScene.duration, equipment: oldScene.equipment,
+                    shootLocation: oldScene.shootLocation, contact: oldScene.contact, notes: oldScene.notes
                 }
             };
             newData.scenes.push(newScene);
         });
-        if (newData.appSpecificData.toSched.panelItems) {
-            newData.appSpecificData.toSched.panelItems.forEach(item => {
-                if(item.type === 'sequence' && item.scenes){
-                    item.sceneIds = item.scenes.map(s => `s_${s.id}`);
-                    delete item.scenes;
-                }
-            });
-        }
+        
+        // Step 3: Re-create the panel structure for BOTH apps
+        oldData.panelItems.forEach(oldItem => {
+            const newItem = { ...oldItem };
+            if (newItem.type === 'sequence') {
+                newItem.sceneIds = (newItem.scenes || []).map(s => `s_${s.id}`);
+                delete newItem.scenes; // Remove old redundant scene data
+            }
+            newData.appSpecificData.toSched.panelItems.push(newItem);
+            newData.appSpecificData.toMake.panelItems.push(JSON.parse(JSON.stringify(newItem))); // Create a clean copy for To Make
+        });
+
         return newData;
     }
 
-    // --- UNIVERSAL DATA HANDLING ---
+    // --- UNIVERSAL DATA HANDLING (MODIFIED) ---
     function getPanelItems() { if (!projectData.appSpecificData) projectData.appSpecificData = {}; if (!projectData.appSpecificData.toMake) projectData.appSpecificData.toMake = { panelItems: [] }; return projectData.appSpecificData.toMake.panelItems; }
     function saveProjectData() { localStorage.setItem('universalFilmProject', JSON.stringify(projectData)); }
     function loadProjectData() {
@@ -139,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (e) => {
             try {
                 let loadedData = JSON.parse(e.target.result);
+                // *** THE TRANSLATOR IS CALLED HERE ***
                 if (loadedData.panelItems && !loadedData.scenes) {
                     loadedData = migrateToSchedDataToUniversal(loadedData);
                 }
@@ -157,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveProjectFile() { const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${(projectData.projectInfo.projectName || 'Project')}.filmproj`; a.click(); URL.revokeObjectURL(url); }
     
-    // --- CORE LOGIC ---
+    // --- The rest of your functions follow, adapted for the new structure ---
     function handleAddSceneToSequence(e) { e.preventDefault(); const activeSequence = getPanelItems().find(item => item.id === activeSequenceId); if (!activeSequence) { alert("No active sequence. Please create or select one first."); return; } const sceneNumberInput = document.getElementById('scene-number'); if (!sceneNumberInput.value.trim()) { alert('Please enter a Scene Number.'); return; } const newScene = { sceneId: `s_${Date.now()}`, sceneNumber: sceneNumberInput.value, sceneType: document.getElementById('scene-type').value, sceneSetting: document.getElementById('scene-location').value, dayNight: document.getElementById('scene-time').value, description: "", breakdownData: JSON.parse(JSON.stringify(currentBreakdown)), budgetingData: {}, schedulingData: {} }; projectData.scenes.push(newScene); if (!activeSequence.sceneIds) activeSequence.sceneIds = []; activeSequence.sceneIds.push(newScene.sceneId); saveProjectData(); renderBreakdownStrips(); currentBreakdown = {}; document.getElementById('breakdown-form').reset(); createEntryGrid('breakdown-entry-grid', currentBreakdown); }
     function renderBreakdownStrips() { const container = document.getElementById('breakdown-strips-container'); const display = document.getElementById('active-sequence-display'); const activeSequence = getPanelItems().find(item => item.id === activeSequenceId); if (!activeSequence) { display.textContent = 'No active sequence. Create one from the side panel.'; container.innerHTML = ''; calculateAndRenderSequenceTotal(); return; } display.textContent = `Current Sequence: ${activeSequence.name}`; container.innerHTML = ''; const sceneIdsInSequence = activeSequence.sceneIds || []; const breakdowns = projectData.scenes.filter(s => sceneIdsInSequence.includes(s.sceneId)); const filteredBreakdowns = getFilteredBreakdowns(breakdowns); filteredBreakdowns.forEach(scene => { const stripWrapper = document.createElement('div'); stripWrapper.className = 'breakdown-strip-wrapper'; let summaryHTML = ''; let sceneTotalCost = 0; const breakdownData = scene.breakdownData || {}; CATEGORIES.forEach(cat => { const items = breakdownData[cat.key]; if (items && items.length > 0) { summaryHTML += `<div class="strip-item-summary" style="color:${cat.color};"><i class="fas ${cat.icon}"></i><span class="count">${items.length}</span></div>`; sceneTotalCost += items.reduce((sum, item) => sum + (item.cost || 0), 0); } }); const costHTML = `<div class="strip-item-cost">${formatCurrency(sceneTotalCost)}</div>`; stripWrapper.innerHTML = `<div class="breakdown-strip"><div class="strip-item-scene">#${scene.sceneNumber} - ${scene.sceneSetting} (${scene.dayNight})</div>${summaryHTML}${costHTML}</div><div class="strip-actions"><button class="share-btn-strip" data-id="${scene.sceneId}" title="Share Scene as Excel"><i class="fas fa-file-excel"></i></button><button class="edit-btn-strip" data-id="${scene.sceneId}" title="Edit Breakdown"><i class="fas fa-pencil-alt"></i></button><button class="delete-btn-strip" data-id="${scene.sceneId}" title="Delete Scene"><i class="fas fa-trash"></i></button></div>`; container.appendChild(stripWrapper); }); container.querySelectorAll('.edit-btn-strip').forEach(b => b.onclick = () => openEditModal(b.dataset.id)); container.querySelectorAll('.delete-btn-strip').forEach(b => b.onclick = () => handleDelete(b.dataset.id)); container.querySelectorAll('.share-btn-strip').forEach(b => b.onclick = () => shareSceneAsExcel(b.dataset.id)); calculateAndRenderSequenceTotal(); }
     function openEditModal(sceneId) { const modal = document.getElementById('edit-breakdown-modal'); const scene = projectData.scenes.find(s => s.sceneId === sceneId); if (!modal || !scene) return; modal.innerHTML = `<div class="modal-content"><span class="close-btn">&times;</span><div class="modal-body"><h3>Edit Scene #${scene.sceneNumber}</h3><div class="breakdown-grid" id="edit-breakdown-grid"></div></div><div class="modal-actions"><button id="save-changes-btn" class="btn-primary">Save Changes</button></div></div>`; modal.style.display = 'block'; let tempEditData = JSON.parse(JSON.stringify(scene.breakdownData || {})); createEntryGrid('edit-breakdown-grid', tempEditData); modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none'; modal.querySelector('#save-changes-btn').onclick = () => { scene.breakdownData = tempEditData; saveProjectData(); renderBreakdownStrips(); modal.style.display = 'none'; }; }
@@ -165,8 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleNewSequence() { let name = prompt("Enter a name for the new sequence:"); if (name === null) return; if (name.trim() === "") name = `Sequence ${getPanelItems().filter(i => i.type === 'sequence').length + 1}`; const newItem = { type: 'sequence', id: Date.now(), name: name, sceneIds: [] }; getPanelItems().push(newItem); setActiveItem(newItem.id); }
     function setActiveItem(id) { const item = getPanelItems().find(i => i.id === id); if (item && item.type === 'sequence') { activeSequenceId = id; projectData.appSpecificData.toMake.activeItemId = id; saveProjectData(); renderBreakdownStrips(); renderSequencePanel(); } }
     function renderSequencePanel() { const listContainer = document.getElementById('sequence-list'); listContainer.innerHTML = ''; const panelItems = getPanelItems(); panelItems.forEach(item => { const element = document.createElement('div'); element.dataset.id = item.id; let editBtnHTML = `<button class="edit-panel-item-btn" title="Edit Name"><i class="fas fa-pencil-alt"></i></button>`; if (item.type === 'sequence') { element.className = `sequence-item ${item.id === activeSequenceId ? 'active' : ''}`; element.innerHTML = `<span class="panel-item-name">${item.name}</span><div class="panel-item-actions">${editBtnHTML}</div>`; element.querySelector('.panel-item-name').onclick = () => { setActiveItem(item.id); document.getElementById('sequence-panel').classList.remove('open'); }; } else if (item.type === 'schedule_break') { element.className = 'schedule-break-item'; element.innerHTML = `<span class="panel-item-name">${item.name}</span><div class="panel-item-actions">${editBtnHTML}</div>`; } element.querySelector('.edit-panel-item-btn').onclick = (e) => { e.stopPropagation(); handleRenamePanelItem(item.id, item.type);}; listContainer.appendChild(element); }); }
-    
-    // (Rest of the functions from your original JS, adapted for the new data structure)
     function setMode(mode) { currentMode = mode; localStorage.setItem('toMakeAppMode', mode); const container = document.getElementById('main-container'); const currencyWrapper = document.getElementById('currency-selector-wrapper'); const estimateBtn = document.getElementById('estimate-btn'); const assistantBtn = document.getElementById('assistant-mode-btn'); const producerBtn = document.getElementById('producer-mode-btn'); if (mode === 'producer') { container.classList.add('producer-mode'); currencyWrapper.style.display = 'block'; estimateBtn.style.display = 'block'; producerBtn.classList.add('active-mode'); assistantBtn.classList.remove('active-mode'); } else { container.classList.remove('producer-mode'); currencyWrapper.style.display = 'none'; estimateBtn.style.display = 'none'; assistantBtn.classList.add('active-mode'); producerBtn.classList.remove('active-mode'); if(currentView === 'estimation') showView('breakdown'); } createEntryGrid('breakdown-entry-grid', currentBreakdown); renderBreakdownStrips(); }
     function showView(viewName) { currentView = viewName; const breakdownView = document.getElementById('breakdown-view'); const estimationView = document.getElementById('estimation-view'); const estimateBtn = document.getElementById('estimate-btn'); const title = document.getElementById('app-title'); if (viewName === 'estimation') { breakdownView.style.display = 'none'; estimationView.style.display = 'block'; title.textContent = 'Project Estimation'; estimateBtn.innerHTML = `<i class="fas fa-clipboard-list"></i>`; estimateBtn.title = "Back to Breakdown"; estimateBtn.onclick = () => showView('breakdown'); renderEstimationPage(); } else { breakdownView.style.display = 'block'; estimationView.style.display = 'none'; title.textContent = 'To Make'; estimateBtn.innerHTML = `<i class="fas fa-calculator"></i>`; estimateBtn.title = "Project Estimate"; estimateBtn.onclick = () => showView('estimation'); } }
     function createEntryGrid(gridId, targetData) { const grid = document.getElementById(gridId); if (!grid) return; grid.innerHTML = ''; CATEGORIES.forEach(cat => { if (cat.key === 'misc' && currentMode !== 'producer') { return; } const isProducer = currentMode === 'producer'; const formHTML = isProducer ? `<form class="add-item-form producer-form" data-category="${cat.key}"><input type="text" placeholder="Item Name" class="item-name-input" required><input type="number" placeholder="Cost" min="0" step="0.01" class="item-cost-input"><button type="submit" class="btn-primary">Add</button></form>` : `<form class="add-item-form" data-category="${cat.key}"><input type="text" placeholder="Add element..." required><button type="submit" class="btn-primary">Add</button></form>`; const categoryDiv = document.createElement('div'); categoryDiv.className = 'breakdown-entry-category'; categoryDiv.style.borderTopColor = cat.color; categoryDiv.innerHTML = `<h4><i class="fas ${cat.icon}"></i> ${cat.title}</h4> ${formHTML} <ul class="item-list-entry" id="list-${gridId}-${cat.key}"></ul>`; grid.appendChild(categoryDiv); categoryDiv.querySelector('.add-item-form').addEventListener('submit', (e) => { e.preventDefault(); const categoryKey = e.target.dataset.category; const nameInput = e.target.querySelector('.item-name-input, input[type="text"]'); const costInput = e.target.querySelector('.item-cost-input'); if (nameInput.value.trim()) { if (!targetData[categoryKey]) targetData[categoryKey] = []; targetData[categoryKey].push({ id: Date.now(), name: nameInput.value.trim(), cost: costInput ? parseFloat(costInput.value) || 0 : 0 }); renderItemList(`list-${gridId}-${cat.key}`, categoryKey, targetData); nameInput.value = ''; if (costInput) costInput.value = ''; } }); if (gridId === 'breakdown-entry-grid' && cat.key === 'misc' && (!targetData.misc || targetData.misc.length === 0)) { targetData.misc = [ {id: Date.now()+1, name: "Food", cost: 0}, {id: Date.now()+2, name: "Logistics", cost: 0}, {id: Date.now()+3, name: "Accommodation", cost: 0} ]; } renderItemList(`list-${gridId}-${cat.key}`, cat.key, targetData); }); }
