@@ -63,7 +63,9 @@
     <div class="container" id="main-container">
         <!-- Main Breakdown View -->
         <div id="breakdown-view">
-            <input type="file" id="file-input" accept=".filmbreakdown,.json" style="display: none;">
+            <!-- *** THIS LINE IS THE CRITICAL FIX *** -->
+            <input type="file" id="file-input" accept=".filmproj" style="display: none;">
+            
             <div class="section" id="breakdown-tool">
                 <div class="top-controls">
                     <div id="active-sequence-display">No active sequence.</div>
@@ -130,3 +132,4 @@
     <script src="script.js" defer></script>
 </body>
 </html>
+
